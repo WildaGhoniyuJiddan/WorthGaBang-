@@ -10,7 +10,21 @@ PRICE_RE = re.compile(
     r"rp\.?\s*(?P<idr>[\d][\d.,]*)|(?P<num>[\d][\d.,]*)\s*(?P<unit>jt|juta|rb|ribu)\b",
     re.IGNORECASE,
 )
-BRANDS = ("asus", "acer", "lenovo", "hp", "dell", "msi", "gigabyte", "zotac", "evga", "galax", "vurrion", "intel", "amd", "nvidia")
+BRANDS = (
+    # GPU AIB / komponen
+    "asus", "acer", "lenovo", "hp", "dell", "msi", "gigabyte", "zotac", "evga",
+    "galax", "vurrion", "intel", "amd", "nvidia", "sapphire", "powercolor",
+    "colorful", "xfx", "asrock", "palit", "gainward", "axle", "leadtek", "pny",
+    # brand laptop/PC lokal & entry-level Indonesia
+    "axioo", "advan", "zyrex", "infinix", "hisi", "kozy",
+    # brand lain yang umum di listing
+    "apple", "macbook", "huawei", "honor", "xiaomi", "redmibook", "realme",
+    "samsung", "toshiba", "dynabook", "fujitsu", "microsoft", "surface",
+    "razer", "alienware", "chuwi", "vaio", "lg",
+    # fallback: kalau merk induk gak disebut, series punya nilai identifikasi
+    "rog", "tuf", "legion", "nitro", "vivobook", "zenbook", "ideapad",
+    "thinkpad", "victus", "omen", "katana", "aorus", "chromebook", "predator",
+)
 
 SECOND_HINTS = ("second", "bekas", "2nd", "preloved", "pre-owned", "preowned", " used ", "like new")
 

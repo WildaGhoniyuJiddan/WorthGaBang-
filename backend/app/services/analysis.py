@@ -1,5 +1,7 @@
+import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable
 
 from sqlalchemy import desc, select
@@ -27,6 +29,48 @@ def _similarity(query: str, title: str) -> float:
 # katalog punya kolom is_build yang beneran, ganti ini.
 _BUILD_WORDS = ("pc gaming", "pc rakitan", "komputer", "desktop", "pc mini", "built up", "fullset", "paket ")
 _ACCESSORY_WORDS = ("fan ", "kipas", "cooler ", "dus ", "box only", "bracket", "cable", "kabel", "riser", "backplate", "sticker", "case ")
+
+# ponytail: harga BARU referensi (USD street dari PCPartPicker dataset) -> IDR.
+# Kurs & diskon retail ID di-hardcode; kalau mau presisi, ambil kurs harian API.
+USD_TO_IDR = 16_500
+RETAIL_MARKUP = 1.10  # harga retail Indonesia biasanya ~10% di atas USD street
+
+_NEW_PRICE_REF_PATH = Path(__file__).resolve().parents[2] / "app" / "data" / "new_price_reference.json"
+_new_price_ref: dict | None = None
+
+
+def _load_new_price_ref() -> dict:
+    global _new_price_ref
+    if _new_price_ref is None:
+        try:
+            _new_price_ref = json.loads(_NEW_PRICE_REF_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _new_price_ref = {"gpu": {}, "cpu": {}}
+    return _new_price_ref
+
+
+def new_price_anchor(query: str) -> int | None:
+    """Harga BARU referensi (IDR) untuk query GPU/CPU, None kalau gak ketemu."""
+    ref = _load_new_price_ref()
+    q = " ".join((query or "").lower().split())
+    m = re.search(r"(rtx|gtx)\s*(\d{3,4})\s*(ti|super)?", q)
+    key = f"{m.group(1)} {m.group(2)}{(' ' + m.group(3)) if m.group(3) else ''}" if m else None
+    if not key:
+        m = re.search(r"rx\s*(\d{4})\s*(xt)?", q)
+        if m:
+            key = f"rx {m.group(1)}{(' xt') if m.group(2) else ''}"
+    if not key:
+        m = re.search(r"ryzen\s*([3579])\s*((?:9\d{3}|[357]\d{3}))", q)
+        if m:
+            key = f"ryzen {m.group(1)} {m.group(2)}"
+    if not key:
+        m = re.search(r"core i([3579])\s*-?\s*((?:10|11|12|13|14)\d{3})", q)
+        if m:
+            key = f"core i{m.group(1)} {m.group(2)}"
+    usd = ref.get("gpu", {}).get(key) or ref.get("cpu", {}).get(key)
+    if not usd:
+        return None
+    return int(usd * USD_TO_IDR * RETAIL_MARKUP)
 
 
 def _is_relevant_pc_listing(query: str, title: str, component_type: str | None) -> bool:
@@ -105,11 +149,22 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
     matching = [item for item in scored if item[0] >= 0.75]
     if not matching:
         return []
-    # urutkan by similarity lalu ambil median harga sebagai anchor: median
-    # kebal aksesori murah dan build mahal.
+    if request.condition and request.condition != "any":
+        wanted = request.condition
+        same = [item for item in matching if (item[1].condition or "new") == wanted]
+        # kalau kondisi itu gak ada samsek, jangan paksa pakai lawannya
+        matching = same or matching
+    # outlier guard: median robust, tapi IQR ekstrem tetap bisa narik anchor;
+    # buang harga di luar [Q1-1.5xIQR, Q3+1.5xIQR] sebelum pilih pembanding.
     matching.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
     top = matching[:20]
     prices = sorted(item[1].raw_price or 0 for item in top)
+    q1 = prices[max(0, len(prices) // 4)]
+    q3 = prices[min(len(prices) - 1, (3 * len(prices)) // 4)]
+    iqr = q3 - q1
+    lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    inliers = [item for item in top if lo <= (item[1].raw_price or 0) <= hi]
+    top = inliers or top
     anchor = prices[len(prices) // 2]
     # pilih listing yang harganya paling dekat dengan median supaya output
     # comparisons representatif, bukan ekstrem termurah/termahal
@@ -162,5 +217,11 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
 def analyze(session: Session, request: AnalyzeRequest):
     comparisons = _pc_comparisons(session, request) if request.mode == "pc" else _laptop_comparisons(session, request)
     result = score_price(request.price, [comparison.price for comparison in comparisons])
+    # fallback anchor harga BARU dari katalog referensi (buildcores+PCPartPicker)
+    # kalau listing second yang relevan gak cukup untuk kasih verdict.
+    if result.verdict == "data terbatas" or not comparisons:
+        ref_new = new_price_anchor(request.query)
+        if ref_new:
+            result = score_price(request.price, [ref_new])
     selected_source = "tokopedia" if request.mode == "pc" else (comparisons[0].source if comparisons else "tokopedia")
     return result, comparisons, freshness(session, selected_source)

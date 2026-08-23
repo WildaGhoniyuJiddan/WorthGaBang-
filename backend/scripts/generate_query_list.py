@@ -84,13 +84,25 @@ cpu_final = [q for q in CPU_WHITELIST if q in cpu_queries] or sorted(cpu_queries
 
 # ---- Laptop: brand x series (pasar Indonesia) ------------------------------
 LAPTOP_QUERIES = [
-    "ASUS ROG", "ASUS TUF Gaming", "ASUS Vivobook", "ASUS Zenbook",
-    "Lenovo Legion", "Lenovo LOQ", "Lenovo IdeaPad", "Lenovo ThinkPad",
-    "Acer Nitro", "Acer Predator", "Acer Aspire", "Acer Swift",
-    "MSI Katana", "MSI GF63", "MSI Modern", "MSI Cyborg",
-    "HP Victus", "HP Omen", "HP Pavilion", "Pavilion Gaming",
-    "Dell G15", "Alienware", "Gigabyte Aorus", "Gigabyte G5",
-    "Axioo Pongo", "Advan Workpro", "laptop Core i5", "laptop Ryzen 5",
+    # brand x series gaming
+    "ASUS ROG", "ASUS TUF Gaming", "Lenovo Legion", "Lenovo LOQ",
+    "Acer Nitro", "Acer Predator", "MSI Katana", "MSI GF63", "MSI Cyborg",
+    "HP Victus", "HP Omen", "Dell G15", "Gigabyte Aorus", "Alienware",
+    # brand x segmen tipis/kerja
+    "ASUS Vivobook", "ASUS Zenbook", "Lenovo IdeaPad", "Lenovo ThinkPad",
+    "Acer Aspire", "Acer Swift", "MSI Modern", "HP Pavilion",
+    # CPU x brand generik
+    "laptop asus core i5", "laptop lenovo i7", "laptop acer ryzen 5",
+    "laptop gaming ryzen", "laptop gaming core i5", "laptop i7 rtx",
+    "laptop rtx 3050", "laptop rtx 3060", "laptop rx 6600m",
+    # segmen harga rendah (pasar second dominan)
+    "laptop 2 jutaan", "laptop 3 jutaan", "laptop murah",
+    "laptop core i3 second", "laptop bekas kerja", "laptop kantor second",
+    # lokal & entry-level
+    "Axioo Pongo", "Advan Workpro", "Advan laptop", "Zyrex laptop",
+    "Infinix laptop", "Infinix GT Book",
+    # macbook
+    "MacBook Air", "MacBook Pro",
 ]
 
 query_data = {

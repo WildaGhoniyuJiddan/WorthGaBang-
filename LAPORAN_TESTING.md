@@ -40,6 +40,17 @@
    dengan harga terdekat ke median top-20 — output gak didominasi ekstrem murah/mahal.
 10. **Window analyze terlalu sempit**: hanya 500 row terbaru, padahal sweep 71 query
     menghasilkan 777+ row PC. Dilonggarkan ke 2000 + threshold similarity >=0.75.
+11. **RX 6600 Rp10jt masuk akal?** (kasus nyata). Akar: pembanding nyampur
+    RX 6600 **XT** baru (Rp10,4jt) + PC build. Fix berlapis:
+    - filter kondisi new/second di analyze (request.condition kini dihormati
+      untuk PC juga, bukan cuma laptop);
+    - outlier guard IQR 1.5x pada 20 kandidat teratas;
+    - **anchor harga baru referensi** (fallback): katalog gabungan
+      buildcores-open-db (276 chipset GPU, 716 nama CPU) + harga USD street
+      PCPartPicker → konversi IDR (kurs 16.500 + markup retail 10%).
+      Contoh: RX 6600 baru ≈ Rp3,99jt — sesuai ekspektasi pasar.
+      File: app/data/new_price_reference.json, regen via
+      scripts/generate_new_price_ref.py.
 
 ## Jawaban dua pertanyaanmu (hasil eksperimen nyata, bukan teori)
 
