@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "WorL Collector",
+  "version": "3.0.0",
+  "description": "Pengumpul pertanyaan 'worth it?' PC/Laptop dari feed/grup Facebook -> dataset lokal.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://localhost:8787/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WorL Collector"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

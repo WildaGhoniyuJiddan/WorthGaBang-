@@ -1,0 +1,2 @@
+"""HargaPas backend package."""
+
