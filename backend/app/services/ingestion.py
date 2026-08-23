@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..models import RawListing
 from .normalizer import normalize_listing
-from .parsing import clean_text, detect_category, parse_price, stable_listing_hash
+from .parsing import clean_text, detect_category, detect_condition, parse_price, stable_listing_hash
 
 
 @dataclass
@@ -28,6 +28,7 @@ def ingest_listings(session: Session, source: str, listings: Iterable[ListingInp
         if not title:
             continue
         price = parse_price(item.price)
+        condition = item.condition or detect_condition(f"{title} {item.spec_text or ''}")
         listing_hash = stable_listing_hash(source, title, price, item.url)
         exists = session.scalar(select(RawListing.id).where(RawListing.listing_hash == listing_hash))
         if exists:
@@ -40,7 +41,7 @@ def ingest_listings(session: Session, source: str, listings: Iterable[ListingInp
             raw_spec_text=clean_text(item.spec_text) if item.spec_text else None,
             listing_url=item.url,
             listing_hash=listing_hash,
-            condition=item.condition,
+            condition=condition,
             scraped_at=item.scraped_at or datetime.now(timezone.utc),
         )
         session.add(raw)

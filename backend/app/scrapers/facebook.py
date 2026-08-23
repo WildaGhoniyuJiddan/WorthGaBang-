@@ -15,6 +15,10 @@ class FacebookMarketplaceScraper(Scraper):
     def fetch(self, query: str) -> list[ListingRecord]:
         url = f"https://www.facebook.com/marketplace/indonesia/search?query={quote(query)}"
         headers = {"Cookie": self.cookie} if self.cookie else {}
+        # ponytail: UA bot eksplisit khusus FB — UA browser malah dapat HTTP 400
+        # (tes 23 Aug 2026); bot-UA dapat halaman login-wall yang bisa dideteksi.
+        headers.setdefault("User-Agent", "HargaPasBot/1.0 (+scheduled-catalog)")
+        headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         try:
             with self._client(headers) as client:
                 response = client.get(url)
@@ -33,4 +37,3 @@ class FacebookMarketplaceScraper(Scraper):
         if not records:
             raise ScraperError("Facebook Marketplace tidak mengembalikan listing yang bisa diparse")
         return records[:100]
-

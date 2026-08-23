@@ -23,6 +23,22 @@ def _similarity(query: str, title: str) -> float:
     return round(len(wanted & actual) / len(wanted), 3)
 
 
+# ponytail: filter kasar listing full-build vs komponen lepas; kalau nanti
+# katalog punya kolom is_build yang beneran, ganti ini.
+_BUILD_WORDS = ("pc gaming", "pc rakitan", "komputer", "desktop", "pc mini", "built up", "fullset", "paket ")
+_ACCESSORY_WORDS = ("fan ", "kipas", "cooler ", "dus ", "box only", "bracket", "cable", "kabel", "riser", "backplate", "sticker", "case ")
+
+
+def _is_relevant_pc_listing(query: str, title: str, component_type: str | None) -> bool:
+    text = f"{query} {title}".lower()
+    if any(word in text for word in _BUILD_WORDS):
+        return False
+    if any(word in text for word in _ACCESSORY_WORDS):
+        return False
+    # listing komponen asli menyebut 1 chipset; aksesori/build menyebut banyak
+    return len(re.findall(r"(?:rtx|gtx|rx)\s*\d{3,4}", title.lower())) <= 1
+
+
 def _age_label(seconds: int | None) -> str:
     if seconds is None:
         return "belum ada data"
@@ -74,12 +90,31 @@ def all_freshness(session: Session) -> dict[str, Freshness]:
 
 
 def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
+    # ponytail: ambil 2000 row terakhir; kalau katalog >20k listing, pindahkan
+    # filter relevan ke query SQL (LIKE per token model).
     rows = session.scalars(
-        select(RawListing).where(RawListing.category == "pc", RawListing.raw_price.is_not(None)).order_by(desc(RawListing.scraped_at)).limit(500)
+        select(RawListing).where(RawListing.category == "pc", RawListing.raw_price.is_not(None)).order_by(desc(RawListing.scraped_at)).limit(2000)
     ).all()
-    scored = [(_similarity(request.query, row.raw_title), row) for row in rows]
-    matching = [item for item in scored if item[0] > 0]
-    selected = sorted(matching or scored, key=lambda item: (item[0], item[1].scraped_at), reverse=True)[:10]
+    scored = [
+        (_similarity(request.query, row.raw_title), row)
+        for row in rows
+        if _is_relevant_pc_listing(request.query, row.raw_title, request.component_type)
+    ]
+    # butuh kemiripan token tinggi (>=0.75) supaya "RX 6600" tidak membandingkan
+    # diri dengan PC build yang iseng mention RX 6600 atau laptop seri lain
+    matching = [item for item in scored if item[0] >= 0.75]
+    if not matching:
+        return []
+    # urutkan by similarity lalu ambil median harga sebagai anchor: median
+    # kebal aksesori murah dan build mahal.
+    matching.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
+    top = matching[:20]
+    prices = sorted(item[1].raw_price or 0 for item in top)
+    anchor = prices[len(prices) // 2]
+    # pilih listing yang harganya paling dekat dengan median supaya output
+    # comparisons representatif, bukan ekstrem termurah/termahal
+    top.sort(key=lambda item: abs((item[1].raw_price or 0) - anchor))
+    selected = top[:10]
     return [
         Comparison(
             title=row.raw_title,

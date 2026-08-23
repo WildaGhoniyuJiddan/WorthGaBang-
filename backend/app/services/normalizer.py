@@ -76,6 +76,13 @@ def normalize_laptop(raw: RawListing) -> LaptopUnit:
     )
 
 
+def _canonical_model(model: str) -> str:
+    # "RTX3050" / "rtx 3050" / "RX6600XT" -> "RTX 3050" / "RX 6600 Xt"
+    text = re.sub(r"\s+", " ", model.strip().upper())
+    text = re.sub(r"(RTX|GTX|RX|RYZEN|CORE I\d)\s*", r"\1 ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def normalize_listing(session: Session, raw: RawListing) -> None:
     if not raw.raw_price:
         return
@@ -86,7 +93,7 @@ def normalize_listing(session: Session, raw: RawListing) -> None:
         return
 
     component_type = _component_type(raw.raw_title)
-    model = _find_model(raw.raw_title, component_type)
+    model = _canonical_model(_find_model(raw.raw_title, component_type))
     brand = detect_brand(raw.raw_title)
     existing = session.scalar(
         select(PCComponent).where(
@@ -103,10 +110,21 @@ def normalize_listing(session: Session, raw: RawListing) -> None:
         select(RawListing).where(RawListing.category == "pc", RawListing.raw_price.is_not(None))
     ).all()
     model_tokens = [token for token in re.findall(r"[a-z0-9]+", model.lower()) if len(token) > 1]
+    variant = next((v for v in ("super", "ti") if v in model_tokens), None)
+
+    def _matches(row_title: str) -> bool:
+        tokens = set(re.findall(r"[a-z0-9]+", row_title.lower()))
+        if not all(token in tokens for token in model_tokens):
+            return False
+        # "RTX 4060" tidak boleh match "RTX 4060 Ti" / "4060 SUPER" dan sebaliknya
+        if variant:
+            return variant in tokens
+        return not any(v in tokens for v in ("ti", "super"))
+
     matching_prices = [
         row.raw_price
         for row in all_rows
-        if row.raw_price and all(token in row.raw_title.lower() for token in model_tokens)
+        if row.raw_price and _matches(row.raw_title)
     ]
     prices = matching_prices or [row.raw_price for row in all_rows if row.raw_price]
     existing.avg_price = int(mean(prices)) if prices else raw.raw_price

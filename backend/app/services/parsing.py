@@ -3,8 +3,16 @@ import re
 from typing import Optional
 
 
-PRICE_RE = re.compile(r"(?:rp\.?\s*)?([\d][\d.,]*)\s*(jt|juta|rb|ribu)?", re.IGNORECASE)
+# ponytail: harga wajib ber-prefix mata uang ("Rp") atau satuan ("jt/rb") supaya
+# angka liar di judul/markdown ("Image 64", "RTX 4060", "5.0 rating") tidak ikut ke-match.
+# Kalau nanti ada sumber yang tulis harga telanjang ("4.500.000"), tambahkan context-flag per scraper.
+PRICE_RE = re.compile(
+    r"rp\.?\s*(?P<idr>[\d][\d.,]*)|(?P<num>[\d][\d.,]*)\s*(?P<unit>jt|juta|rb|ribu)\b",
+    re.IGNORECASE,
+)
 BRANDS = ("asus", "acer", "lenovo", "hp", "dell", "msi", "gigabyte", "zotac", "evga", "galax", "vurrion", "intel", "amd", "nvidia")
+
+SECOND_HINTS = ("second", "bekas", "2nd", "preloved", "pre-owned", "preowned", " used ", "like new")
 
 
 def parse_price(value: object) -> Optional[int]:
@@ -12,27 +20,38 @@ def parse_price(value: object) -> Optional[int]:
         return None
     if isinstance(value, (int, float)):
         return int(value) if value > 0 else None
-    text = str(value).lower().replace(" ", " ").strip()
+    text = str(value).lower().replace("\u00a0", " ").strip()
     match = PRICE_RE.search(text)
     if not match:
         return None
-    multiplier = (match.group(2) or "").lower()
-    raw_number = match.group(1)
-    if multiplier and ("," in raw_number or "." in raw_number):
+    if match.group("idr"):
+        digits = match.group("idr").replace(".", "").replace(",", "")
+        if not digits.isdigit():
+            return None
+        amount = int(digits)
+        return amount if amount > 0 else None
+    raw_number = match.group("num")
+    unit = (match.group("unit") or "").lower()
+    if unit in {"jt", "juta"}:
         try:
             amount = int(float(raw_number.replace(",", ".")) * 1_000_000)
         except ValueError:
             return None
         return amount if amount > 0 else None
-    number = raw_number.replace(".", "").replace(",", "")
-    if not number.isdigit():
+    digits = raw_number.replace(".", "").replace(",", "")
+    if not digits.isdigit():
         return None
-    amount = int(number)
-    if multiplier in {"jt", "juta"}:
-        amount *= 1_000_000
-    elif multiplier in {"rb", "ribu"}:
+    amount = int(digits)
+    if unit in {"rb", "ribu"}:
         amount *= 1_000
     return amount if amount > 0 else None
+
+
+def detect_condition(text: str) -> Optional[str]:
+    lowered = f" {str(text or '').lower()} "
+    if any(hint in lowered for hint in SECOND_HINTS):
+        return "second"
+    return None
 
 
 def stable_listing_hash(source: str, title: str, price: Optional[int], url: Optional[str]) -> str:
