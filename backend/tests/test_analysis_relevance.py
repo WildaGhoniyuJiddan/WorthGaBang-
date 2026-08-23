@@ -1,4 +1,5 @@
 from app.services.analysis import _is_relevant_pc_listing, _similarity
+from app.services.relevance import component_type_from_query, query_variants
 
 
 def test_build_and_accessory_filtered():
@@ -16,3 +17,12 @@ def test_similarity_threshold_semantics():
     # "RX 6600" vs judul build yang mention RX 6600 = 1.0, jadi threshold
     # >=0.75 saja tidak cukup tanpa filter accessory/multi-chipset
     assert _similarity("RX 6600", "PC Hackintosh Intel i7 13700F RX 6600") == 1.0
+
+
+def test_component_query_expansion_is_bounded_and_model_safe():
+    variants = query_variants("RTX 3060", max_variants=5)
+    assert variants[0] == "RTX 3060"
+    assert "VGA RTX 3060" in variants
+    assert "RTX 3060 bekas" in variants
+    assert all("3060" in variant for variant in variants)
+    assert component_type_from_query("processor Ryzen 5 5600") == "cpu"

@@ -13,7 +13,13 @@ def scraper_for(source: str) -> Scraper:
     settings = get_settings()
     timeout = settings.scrape_timeout_seconds
     if source == "tokopedia":
-        return TokopediaScraper(timeout=timeout)
+        return TokopediaScraper(
+            timeout=timeout,
+            pages=settings.tokopedia_pages,
+            max_variants=settings.tokopedia_query_variants,
+            max_records=settings.tokopedia_max_records,
+            request_delay=settings.tokopedia_request_delay_seconds,
+        )
     if source == "shopee":
         return ShopeeScraper(cookie=settings.shopee_cookie, timeout=timeout)
     if source == "facebook":
@@ -21,13 +27,19 @@ def scraper_for(source: str) -> Scraper:
     raise ValueError(f"Sumber scraper tidak dikenal: {source}")
 
 
-def run_source(source: str, query: str, schedule: str = "manual", is_fallback: bool = False) -> ScrapeRun:
+def run_source(
+    source: str,
+    query: str,
+    schedule: str = "manual",
+    is_fallback: bool = False,
+    scraper: Scraper | None = None,
+) -> ScrapeRun:
     db: Session = SessionLocal()
     run = ScrapeRun(source=source, schedule=schedule, status="running", is_fallback=is_fallback)
     db.add(run)
     db.commit()
     try:
-        records = scraper_for(source).fetch(query)
+        records = (scraper or scraper_for(source)).fetch(query)
         inserted = ingest_listings(
             db,
             source,

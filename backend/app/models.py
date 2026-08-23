@@ -16,7 +16,6 @@ class RawListing(Base):
     __table_args__ = (
         UniqueConstraint("listing_hash", name="uq_raw_listings_hash"),
         Index("ix_raw_listings_source_category", "source", "category"),
-        Index("ix_raw_listings_scraped_at", "scraped_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -54,7 +53,6 @@ class LaptopUnit(Base):
     __tablename__ = "laptop_units"
     __table_args__ = (
         Index("ix_laptop_units_specs", "brand", "cpu", "gpu", "ram_gb", "storage_gb"),
-        Index("ix_laptop_units_scraped_at", "scraped_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

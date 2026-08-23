@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..models import LaptopUnit, RawListing, ScrapeRun
 from ..schemas import AnalyzeRequest, Comparison, Freshness
+from .relevance import is_relevant_pc_listing
 from .scoring import score_price
 
 
@@ -24,11 +25,6 @@ def _similarity(query: str, title: str) -> float:
         return 0.0
     return round(len(wanted & actual) / len(wanted), 3)
 
-
-# ponytail: filter kasar listing full-build vs komponen lepas; kalau nanti
-# katalog punya kolom is_build yang beneran, ganti ini.
-_BUILD_WORDS = ("pc gaming", "pc rakitan", "komputer", "desktop", "pc mini", "built up", "fullset", "paket ")
-_ACCESSORY_WORDS = ("fan ", "kipas", "cooler ", "dus ", "box only", "bracket", "cable", "kabel", "riser", "backplate", "sticker", "case ")
 
 # ponytail: harga BARU referensi (USD street dari PCPartPicker dataset) -> IDR.
 # Kurs & diskon retail ID di-hardcode; kalau mau presisi, ambil kurs harian API.
@@ -74,13 +70,7 @@ def new_price_anchor(query: str) -> int | None:
 
 
 def _is_relevant_pc_listing(query: str, title: str, component_type: str | None) -> bool:
-    text = f"{query} {title}".lower()
-    if any(word in text for word in _BUILD_WORDS):
-        return False
-    if any(word in text for word in _ACCESSORY_WORDS):
-        return False
-    # listing komponen asli menyebut 1 chipset; aksesori/build menyebut banyak
-    return len(re.findall(r"(?:rtx|gtx|rx)\s*\d{3,4}", title.lower())) <= 1
+    return is_relevant_pc_listing(query, title, component_type)
 
 
 def _age_label(seconds: int | None) -> str:
@@ -153,7 +143,9 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
         wanted = request.condition
         same = [item for item in matching if (item[1].condition or "new") == wanted]
         # kalau kondisi itu gak ada samsek, jangan paksa pakai lawannya
-        matching = same or matching
+        matching = same
+        if not matching:
+            return []
     # outlier guard: median robust, tapi IQR ekstrem tetap bisa narik anchor;
     # buang harga di luar [Q1-1.5xIQR, Q3+1.5xIQR] sebelum pilih pembanding.
     matching.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
@@ -177,7 +169,7 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
             source=row.source,
             listing_url=row.listing_url,
             similarity=similarity,
-            condition=row.condition,
+            condition=row.condition or "new",
         )
         for similarity, row in selected
     ]
@@ -219,9 +211,20 @@ def analyze(session: Session, request: AnalyzeRequest):
     result = score_price(request.price, [comparison.price for comparison in comparisons])
     # fallback anchor harga BARU dari katalog referensi (buildcores+PCPartPicker)
     # kalau listing second yang relevan gak cukup untuk kasih verdict.
-    if result.verdict == "data terbatas" or not comparisons:
+    if (result.verdict == "data terbatas" or not comparisons) and request.condition != "second":
         ref_new = new_price_anchor(request.query)
         if ref_new:
             result = score_price(request.price, [ref_new])
+            if not comparisons:
+                comparisons = [
+                    Comparison(
+                        title=f"Reference harga baru {request.query} (bukan listing marketplace)",
+                        price=ref_new,
+                        source="price_reference",
+                        listing_url=None,
+                        similarity=0.5,
+                        condition="new",
+                    )
+                ]
     selected_source = "tokopedia" if request.mode == "pc" else (comparisons[0].source if comparisons else "tokopedia")
     return result, comparisons, freshness(session, selected_source)

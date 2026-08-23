@@ -34,7 +34,7 @@ export default function HomePage() {
         gpu: mode === "laptop" ? gpu || undefined : undefined,
         ram_gb: mode === "laptop" && ram ? Number(ram) : undefined,
         storage_gb: mode === "laptop" && storage ? Number(storage) : undefined,
-        condition: mode === "laptop" ? condition : undefined,
+        condition,
       });
       setResult(analysis);
     } catch (submissionError) {
@@ -78,15 +78,25 @@ export default function HomePage() {
               <div className="input-prefix"><span>Rp</span><input value={price} onChange={(event) => setPrice(event.target.value.replace(/\D/g, ""))} inputMode="numeric" required /></div>
             </label>
             {mode === "pc" ? (
-              <label>
-                Jenis komponen
-                <select value={componentType} onChange={(event) => setComponentType(event.target.value)}>
-                  <option value="gpu">GPU / VGA</option>
-                  <option value="cpu">CPU / Processor</option>
-                  <option value="ram">RAM</option>
-                  <option value="storage">Storage</option>
-                </select>
-              </label>
+              <>
+                <label>
+                  Jenis komponen
+                  <select value={componentType} onChange={(event) => setComponentType(event.target.value)}>
+                    <option value="gpu">GPU / VGA</option>
+                    <option value="cpu">CPU / Processor</option>
+                    <option value="ram">RAM</option>
+                    <option value="storage">Storage</option>
+                  </select>
+                </label>
+                <label>
+                  Kondisi komponen
+                  <select value={condition} onChange={(event) => setCondition(event.target.value)}>
+                    <option value="any">Semua kondisi</option>
+                    <option value="new">Baru</option>
+                    <option value="second">Bekas</option>
+                  </select>
+                </label>
+              </>
             ) : (
               <label>
                 Kondisi unit
@@ -130,7 +140,7 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
       </div>
       <p className="recommendation">{result.recommendation}</p>
       <div className="result-meta"><span>Data {result.freshness.label}</span><span>Sumber utama: {result.freshness.primary_source}</span>{result.freshness.is_stale && <span className="stale">Perlu refresh</span>}</div>
-      <div className="comparisons"><div className="comparison-heading"><h3>Pembanding yang dipakai</h3><span>{result.comparisons.length} listing</span></div>{result.comparisons.map((comparison, index) => <a className="comparison-row" href={comparison.listing_url || "#"} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer"><span className="rank">0{index + 1}</span><span className="comparison-title">{comparison.title}<small>{comparison.source} · match {Math.round(comparison.similarity * 100)}%</small></span><strong>{formatRupiah(comparison.price)}</strong><span className="arrow">↗</span></a>)}</div>
+      <div className="comparisons"><div className="comparison-heading"><h3>Pembanding yang dipakai</h3><span>{result.comparisons.length} referensi</span></div>{result.comparisons.map((comparison, index) => <a className="comparison-row" href={comparison.listing_url || undefined} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer"><span className="rank">0{index + 1}</span><span className="comparison-title">{comparison.title}<small>{comparison.source === "price_reference" ? "referensi katalog, bukan listing marketplace" : comparison.source} · match {Math.round(comparison.similarity * 100)}%</small></span><strong>{formatRupiah(comparison.price)}</strong><span className="arrow">{comparison.listing_url ? "↗" : "—"}</span></a>)}</div>
     </section>
   );
 }

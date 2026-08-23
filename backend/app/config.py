@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     scrape_timeout_seconds: int = 30
     scrape_queries: str = "RTX 3060,RTX 4060,Core i5 laptop,Ryzen 5 laptop"
     stale_after_hours: int = 72
+    tokopedia_pages: int = 2
+    tokopedia_query_variants: int = 5
+    tokopedia_request_delay_seconds: float = 3.5
+    tokopedia_max_records: int = 500
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -30,4 +34,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

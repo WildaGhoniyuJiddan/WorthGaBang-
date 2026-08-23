@@ -42,3 +42,9 @@ def test_tokopedia_parser_blocks():
     assert all(r.url and "tokopedia.com" in r.url for r in records), titles
     second = [r for r in records if r.condition == "second"]
     assert len(second) == 1 and "SECOND" in second[0].title.upper()
+
+
+def test_tokopedia_parser_drops_laptop_when_scraping_pc_component():
+    records = _parse_blocks(SAMPLE, query="RTX 4060", component_type="gpu")
+    assert len(records) == 1
+    assert "ASUS Dual RTX 4060" in records[0].title

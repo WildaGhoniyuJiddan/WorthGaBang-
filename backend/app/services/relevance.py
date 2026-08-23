@@ -1,0 +1,127 @@
+import re
+
+
+_BUILD_WORDS = (
+    "pc gaming",
+    "gaming pc",
+    "pc rakitan",
+    "rakit pc",
+    "komputer",
+    "desktop",
+    "pc mini",
+    "built up",
+    "fullset",
+    "full set",
+    "paket pc",
+    "paket gaming",
+)
+_ACCESSORY_WORDS = (
+    "fan ",
+    "kipas",
+    "cooler ",
+    "dus ",
+    "box only",
+    "bracket",
+    "cable",
+    "kabel",
+    "riser",
+    "backplate",
+    "sticker",
+    "case ",
+    "casing",
+    "adapter",
+    "heatsink",
+    "heatsink",
+    "cover ",
+)
+_LAPTOP_WORDS = ("laptop", "notebook", "macbook", "vivobook", "ideapad", "thinkpad", "chromebook")
+_LAPTOP_SERIES_RE = re.compile(
+    r"\b(?:zephyrus|legion|nitro|predator|victus|omen|pavilion|katana|cyborg|loq|"
+    r"tuf\s+[af]\s*\d{1,3}|rog\s+strix\s+(?:g|scar|hero)\s*\d{1,3})\b",
+    re.IGNORECASE,
+)
+
+
+def component_type_from_query(query: str) -> str | None:
+    text = (query or "").lower()
+    if re.search(r"\b(?:rtx|gtx|rx)\s*\d{3,4}", text):
+        return "gpu"
+    if re.search(r"\b(?:ryzen\s*[3579]|core\s*i[3579])\s*-?\d{4,5}", text):
+        return "cpu"
+    return None
+
+
+def is_standalone_component_query(query: str) -> bool:
+    text = (query or "").lower()
+    return component_type_from_query(text) is not None and not any(word in text for word in _LAPTOP_WORDS)
+
+
+def _component_signature(value: str, component_type: str | None) -> tuple[str, str, str] | None:
+    text = (value or "").lower()
+    if component_type == "gpu":
+        match = re.search(r"\b(rtx|gtx|rx)\s*(\d{3,4})\s*(ti|super|xt)?\b", text)
+        if match:
+            return "gpu", f"{match.group(1)}{match.group(2)}", match.group(3) or ""
+    if component_type == "cpu":
+        match = re.search(r"\b(ryzen\s*[3579]|core\s*i[3579])\s*-?(\d{4,5})", text)
+        if match:
+            return "cpu", re.sub(r"\s+", "", match.group(1)), match.group(2)
+    return None
+
+
+def is_relevant_pc_listing(query: str, title: str, component_type: str | None = None) -> bool:
+    """Reject listings that mention a component but actually sell a build/accessory."""
+    query_text = (query or "").lower()
+    title_text = (title or "").lower()
+    resolved_type = component_type or component_type_from_query(query_text)
+
+    query_signature = _component_signature(query_text, resolved_type)
+    title_signature = _component_signature(title_text, resolved_type)
+    if query_signature and title_signature and query_signature != title_signature:
+        return False
+
+    if any(word in title_text for word in _BUILD_WORDS):
+        return False
+    if any(word in title_text for word in _ACCESSORY_WORDS):
+        return False
+    if resolved_type in {"gpu", "cpu"}:
+        # A standalone component title should not be a laptop or a generic PC.
+        if any(word in title_text for word in _LAPTOP_WORDS) or _LAPTOP_SERIES_RE.search(title_text):
+            return False
+        if re.search(r"\b(?:pc|komputer|desktop)\b", title_text):
+            return False
+        if any(word in title_text for word in ("bundle", "bundling", "paket")):
+            return False
+        # Mobile CPU + memory/storage is a strong signal that the RTX/CPU is
+        # part of a laptop or a complete system instead of a standalone part.
+        if re.search(r"(?:ryzen|core\s+i\d).*(?:ram|ssd|nvme)|(?:ram|ssd|nvme).*(?:ryzen|core\s+i\d)", title_text):
+            return False
+    if resolved_type == "gpu":
+        # Multi-chipset titles are usually bundles, comparison ads, or accessories.
+        if len(re.findall(r"(?:rtx|gtx|rx)\s*\d{3,4}", title_text)) > 1:
+            return False
+    return True
+
+
+def query_variants(query: str, max_variants: int = 5) -> list[str]:
+    """Build safe marketplace queries without changing the canonical model."""
+    base = " ".join((query or "").split()).strip()
+    if not base:
+        return []
+    component_type = component_type_from_query(base)
+    if component_type == "gpu":
+        brand_variant = f"Radeon {base}" if base.lower().startswith("rx ") else f"graphics card {base}"
+        variants = [base, f"VGA {base}", brand_variant, f"{base} bekas", f"{base} baru", f"graphics card {base}"]
+    elif component_type == "cpu":
+        variants = [base, f"processor {base}", f"{base} bekas", f"{base} baru", f"CPU {base}"]
+    else:
+        variants = [base, f"{base} bekas", f"{base} baru"]
+    seen: set[str] = set()
+    result: list[str] = []
+    for variant in variants:
+        normalized = " ".join(variant.split())
+        key = normalized.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(normalized)
+    return result[: max(1, max_variants)]

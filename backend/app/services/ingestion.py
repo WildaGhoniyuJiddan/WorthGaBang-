@@ -28,7 +28,7 @@ def ingest_listings(session: Session, source: str, listings: Iterable[ListingInp
         if not title:
             continue
         price = parse_price(item.price)
-        condition = item.condition or detect_condition(f"{title} {item.spec_text or ''}")
+        condition = item.condition or detect_condition(f"{title} {item.spec_text or ''}") or "new"
         listing_hash = stable_listing_hash(source, title, price, item.url)
         exists = session.scalar(select(RawListing.id).where(RawListing.listing_hash == listing_hash))
         if exists:
@@ -50,4 +50,3 @@ def ingest_listings(session: Session, source: str, listings: Iterable[ListingInp
         inserted += 1
     session.commit()
     return inserted
-

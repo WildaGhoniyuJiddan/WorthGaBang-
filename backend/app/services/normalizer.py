@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..models import LaptopUnit, PCComponent, RawListing
 from .parsing import clean_text, detect_brand, extract_gb
+from .relevance import is_relevant_pc_listing
 
 
 BENCHMARKS = {
@@ -93,6 +94,8 @@ def normalize_listing(session: Session, raw: RawListing) -> None:
         return
 
     component_type = _component_type(raw.raw_title)
+    if not is_relevant_pc_listing(raw.raw_title, raw.raw_title, component_type):
+        return
     model = _canonical_model(_find_model(raw.raw_title, component_type))
     brand = detect_brand(raw.raw_title)
     existing = session.scalar(
@@ -124,7 +127,7 @@ def normalize_listing(session: Session, raw: RawListing) -> None:
     matching_prices = [
         row.raw_price
         for row in all_rows
-        if row.raw_price and _matches(row.raw_title)
+        if row.raw_price and _matches(row.raw_title) and is_relevant_pc_listing(model, row.raw_title, component_type)
     ]
     prices = matching_prices or [row.raw_price for row in all_rows if row.raw_price]
     existing.avg_price = int(mean(prices)) if prices else raw.raw_price

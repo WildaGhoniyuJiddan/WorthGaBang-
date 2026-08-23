@@ -11,6 +11,7 @@ from .models import AnalysisLog, LaptopUnit, PCComponent
 from .schemas import AnalyzeRequest, AnalyzeResponse, FreshnessResponse, IngestRequest, LaptopResponse, PCComponentResponse
 from .services.ingestion import ListingInput, ingest_listings
 from .services.analysis import all_freshness, analyze
+from .services.coverage import report_pc_coverage
 
 
 @asynccontextmanager
@@ -91,6 +92,14 @@ def laptop_catalog(
 @app.get("/api/v1/freshness", response_model=FreshnessResponse)
 def freshness(db: Session = Depends(get_db)) -> FreshnessResponse:
     return FreshnessResponse(sources=all_freshness(db))
+
+
+@app.get("/api/v1/catalog/coverage")
+def catalog_coverage(
+    minimum: int = Query(default=3, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    return report_pc_coverage(db, minimum)
 
 
 @app.post("/api/v1/ingest/{source}")

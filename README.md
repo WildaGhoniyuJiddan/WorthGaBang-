@@ -50,3 +50,4 @@ python scheduler.py
 
 Tokopedia dan Shopee dijadwalkan mingguan; Facebook Marketplace dijadwalkan harian. Jika Facebook gagal pada manual cycle dan Tokopedia berhasil, response job menandai Tokopedia sebagai fallback source. Cookie browser untuk sumber yang memakai sesi dapat diisi lewat `FACEBOOK_COOKIE` dan `SHOPEE_COOKIE`.
 
+Untuk mengecek cakupan pembanding PC sebelum atau sesudah refresh data, gunakan `GET /api/v1/catalog/coverage?minimum=3`. Scraper Tokopedia menjalankan query alias dan pagination terjadwal, tetapi tetap membuang listing yang terdeteksi sebagai PC full-build, laptop, aksesori, atau judul multi-chipset.
