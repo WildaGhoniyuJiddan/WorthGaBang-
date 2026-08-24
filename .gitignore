@@ -26,6 +26,45 @@ service-account*.json
 !.env.*.example
 
 # ==============================================================================
+# DATA DUMPS, RAW DATASETS & INTERNAL ARTIFACTS
+# ==============================================================================
+reddit_*.json
+tokped_*.json
+*.docx
+*.zip
+*.csv
+chart_worth_it.png
+!worl-extension/manifest.json
+
+# Large external dataset directories & submodules
+buildcores-open-db/
+pc-part-dataset/
+
+# ==============================================================================
+# INTERNAL RESEARCH, SCRATCH & PROBE SCRIPTS
+# ==============================================================================
+# Research & Internal Notes
+jina_tokped.md
+METODE_SCRAPING.md
+LAPORAN_TESTING.md
+
+# Root scratch & legacy scripts
+parse_jina_*.py
+test_jina.py
+test_worl_scraper.js
+worl-backend.py
+worl-scraper.js
+
+# Backend reverse-engineering & probe scripts
+backend/scripts/
+
+# Extension probes, test scripts & legacy code
+worl-extension/probe.js
+worl-extension/legacy/
+worl-extension/test_*.js
+worl-extension/hasil/
+
+# ==============================================================================
 # PYTHON & VIRTUAL ENVIRONMENTS
 # ==============================================================================
 # Bytecode & caches
