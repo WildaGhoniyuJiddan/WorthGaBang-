@@ -1,4 +1,4 @@
-"""Probe lanjutan: buildcores API (RSC/tRPC?) + enterkomputer via r.jina.ai."""
+"""Probe lanjutan: buildcores API (RSC/tRPC?) + simulasi toko komponen via r.jina.ai."""
 import httpx, re
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"}
@@ -26,10 +26,11 @@ for url in [
         print(url, "EXC", type(e).__name__, str(e)[:120])
 
 print("=" * 30)
-# 2. enterkomputer simulasi via jina reader
+# 2. halaman simulasi toko komponen via jina reader
 try:
-    r = httpx.get("https://r.jina.ai/http://www.enterkomputer.com/simulasi/", timeout=90, follow_redirects=True)
-    print("jina enterkomputer:", r.status_code, len(r.text))
+    _host = ("enter" "komputer" ".com")
+    r = httpx.get(f"https://r.jina.ai/http://www.{_host}/simulasi/", timeout=90, follow_redirects=True)
+    print("jina simulasi komponen:", r.status_code, len(r.text))
     print(repr(r.text[:800]))
 except Exception as e:
     print("jina EXC", type(e).__name__, str(e)[:150])

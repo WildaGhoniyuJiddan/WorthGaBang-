@@ -45,24 +45,44 @@ def _load_new_price_ref() -> dict:
     return _new_price_ref
 
 
-def new_price_anchor(query: str) -> int | None:
-    """Harga BARU referensi (IDR) untuk query GPU/CPU, None kalau gak ketemu."""
-    ref = _load_new_price_ref()
+def _anchor_key(query: str) -> str | None:
+    """Key model GPU/CPU dari query; format sama dengan generator anchor komponen retail."""
     q = " ".join((query or "").lower().split())
     m = re.search(r"(rtx|gtx)\s*(\d{3,4})\s*(ti|super)?", q)
-    key = f"{m.group(1)} {m.group(2)}{(' ' + m.group(3)) if m.group(3) else ''}" if m else None
+    if m:
+        return f"{m.group(1)} {m.group(2)}{(' ' + m.group(3)) if m.group(3) else ''}"
+    m = re.search(r"rx\s*(\d{4})\s*(xt)?", q)
+    if m:
+        return f"rx {m.group(1)}{(' xt') if m.group(2) else ''}"
+    m = re.search(r"ryzen\s*([3579])\s*((?:9\d{3}|[357]\d{3}))", q)
+    if m:
+        return f"ryzen {m.group(1)} {m.group(2)}"
+    m = re.search(r"core i([3579])\s*-?\s*((?:10|11|12|13|14)\d{3})", q)
+    if m:
+        return f"core i{m.group(1)} {m.group(2)}"
+    return None
+
+
+def new_price_anchor(query: str) -> int | None:
+    """Harga BARU referensi (IDR) untuk query GPU/CPU, None kalau gak ketemu.
+
+    Prioritas: harga retail IDR real dari sumber komponen retail, bucket
+    "retail_idr" di new_price_reference.json (generator:
+    scripts/generate_anchor_harga_komponen.py). Fallback: konversi USD street
+    PCPartPicker -> IDR.
+    """
+    ref = _load_new_price_ref()
+    key = _anchor_key(query)
     if not key:
-        m = re.search(r"rx\s*(\d{4})\s*(xt)?", q)
-        if m:
-            key = f"rx {m.group(1)}{(' xt') if m.group(2) else ''}"
-    if not key:
-        m = re.search(r"ryzen\s*([3579])\s*((?:9\d{3}|[357]\d{3}))", q)
-        if m:
-            key = f"ryzen {m.group(1)} {m.group(2)}"
-    if not key:
-        m = re.search(r"core i([3579])\s*-?\s*((?:10|11|12|13|14)\d{3})", q)
-        if m:
-            key = f"core i{m.group(1)} {m.group(2)}"
+        return None
+
+    # ponytail: exact-match saja utk harga retail — "rtx 3060 ti" itu produk BEDA,
+    # bukan varian "rtx 3060", jadi tidak boleh ikut median.
+    for bucket in ("gpu", "cpu"):
+        price = _load_new_price_ref().get("retail_idr", {}).get(bucket, {}).get(key)
+        if price:
+            return int(price)
+
     usd = ref.get("gpu", {}).get(key) or ref.get("cpu", {}).get(key)
     if not usd:
         return None

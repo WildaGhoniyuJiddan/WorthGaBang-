@@ -1,14 +1,21 @@
-// WorL content script v3 — PENGUMPUL PERTANYAAN WORTH-IT (FB feed saja).
+// WorL content script v4 — dua mode:
 //
-// Arsitektur v3:
-//  1. COLLECT-AS-YOU-GO: MutationObserver menangkap tiap post begitu dirender (FB virtualisasi DOM).
-//  2. DETEKSI: WORTH_DOUBT / WORTH_ASSERT + PRICE + VALUE_JUDGE + gerbang SELL_SIGNALS
-//     (post jualan hanya dihitung kalau ada tanda tanya/partikel keraguan eksplisit).
-//  3. Dedup & stats PERSISTEN via chrome.storage.local (aman tab reload / re-inject).
-//  4. Kirim via background service worker (CORS-safe + retry), bukan fetch langsung.
-//  5. Timestamp absolut dari <abbr title> -> posted_at_title (+ISO bila bisa diparse).
-//  6. CEK JAWABAN (checkReplies): antrian permalink, hitung latency komentar pertama.
-//  7. Anti-deteksi: delay acak, batas waktu/post/idle.
+//  MODE A (fb_feed): PENGUMPUL PERTANYAAN WORTH-IT dari feed/grup.
+//    1. COLLECT-AS-YOU-GO: MutationObserver menangkap tiap post begitu dirender (FB virtualisasi DOM).
+//    2. DETEKSI: WORTH_DOUBT / WORTH_ASSERT + PRICE + VALUE_JUDGE + gerbang SELL_SIGNALS
+//       (post jualan hanya dihitung kalau ada tanda tanya/partikel keraguan eksplisit).
+//    3. Dedup & stats PERSISTEN via chrome.storage.local (aman tab reload / re-inject).
+//    4. Kirim via background service worker (CORS-safe + retry), bukan fetch langsung.
+//    5. Timestamp absolut dari <abbr title> -> posted_at_title (+ISO bila bisa diparse).
+//    6. CEK JAWABAN (checkReplies): antrian permalink, hitung latency komentar pertama.
+//    7. Anti-deteksi: delay acak, batas waktu/post/idle.
+//
+//  MODE B (fb_marketplace): PENGUMPUL HARGA KOMPONEN BEKAS dari FB Marketplace.
+//    - Daftar query GPU/CPU terpasang otomatis (MARKET_QUERIES) — satu sesi = semua query.
+//    - Per query: buka halaman search marketplace -> auto-scroll + collect-as-you-go
+//      (MutationObserver; FB unmount card yang sudah lewat, scroll-then-parse pasti bolong).
+//    - Render floor ~2.5s/scroll, delay antar-query 3-5s.
+//    - Output item: title/price_rp/location/url per listing, type='marketplace_listing'.
 
 const BACKEND = 'http://localhost:8787/collect'
 
@@ -72,7 +79,7 @@ function hashStr(s) {
   return Math.abs(h).toString(36)
 }
 
-// Unscramble nama penulis (FB pecah per karakter + CSS order acak)
+// Unscramble teks (FB pecah per karakter + CSS order acak)
 function smartText(el) {
   if (!el) return ''
   const kids = Array.from(el.children || [])
@@ -202,7 +209,7 @@ function isPcTopic(text) {
   return PC_TERMS.some((w) => t.includes(w))
 }
 
-// ================= EKSTRAK POST =================
+// ================= EKSTRAK POST (mode feed) =================
 
 // Bug 5: parse timestamp absolut dari <abbr title> ke ISO (fallback: raw string).
 const BULAN = { januari: 1, februari: 2, maret: 3, april: 4, mei: 5, juni: 6, juli: 7,
@@ -323,7 +330,7 @@ async function bumpStats(field) {
   return s
 }
 
-// ================= MODE PENGUMPUL TANYA (fb_feed) =================
+// ================= MODE FEED: PENGUMPUL TANYA =================
 
 async function scanFeed() {
   if (stopped || !state.running || state.mode !== 'fb_feed') return
@@ -424,68 +431,7 @@ async function runQuestionCollector() {
   await finishCollect()
 }
 
-// ================= CEK JAWABAN (Bug 2) =================
-// dipanggil saat content script hidup di halaman permalink (URL ada di antrian)
-async function continueReplyCheck() {
-  const q = await chrome.storage.local.get('worl_reply_queue')
-  let queue = q.worl_reply_queue || []
-  const idx = queue.findIndex((x) => x.url && location.href.split('?')[0].replace(/\/$/, '') === x.url)
-  if (idx === -1) return false
-
-  await sleep(jitter(2500, 4000)) // tunggu render komentar
-  const allText = document.body.textContent || ''
-  const cm = allText.match(/([\d.,]+)\s*(?:komentar|comment)/i)
-  const nComments = cm ? parseInt(cm[1].replace(/[.,]/g, ''), 10) || 0 : 0
-
-  let firstReplyIso = null
-  // abbr pertama di halaman = waktu POST-nya sendiri; komentar datang sesudahnya.
-  // Ambil kandidat ISO, buang yg <= waktu post, terakhir yg tersisa = komentar.
-  const isoCandidates = [...document.querySelectorAll('abbr[title]')]
-    .map((a) => parseAbbrTitle(a.getAttribute('title') || ''))
-    .filter(Boolean)
-  const postMs = queue[idx].posted_at ? new Date(queue[idx].posted_at).getTime() : null
-  const replies = isoCandidates.filter((iso) => !postMs || new Date(iso).getTime() > postMs)
-  if (replies.length) firstReplyIso = replies[0]
-
-  let latency = null
-  if (nComments > 0 && firstReplyIso && queue[idx].posted_at) {
-    latency = Math.max(0, Math.round((new Date(firstReplyIso) - postMs) / 60000))
-  }
-
-  const sent = await send({
-    site: 'facebook_feed',
-    keyword: state.keyword || '(grup)',
-    page_url: location.href,
-    type: 'question_post',
-    items: [{
-      id: queue[idx].id,
-      url: queue[idx].url,
-      answered: nComments > 0,
-      first_reply_latency_minutes: latency,
-      reply_check_at: new Date().toISOString(),
-    }],
-  })
-  if (sent) {
-    queue.splice(idx, 1)
-    await chrome.storage.local.set({ worl_reply_queue: queue })
-  } else {
-    // backend mati — stop fase reply, antrian dipertahankan (jangan loop tak berujung)
-    await endReplyPhase()
-    setBadge('Backend mati! antrian cek-jawaban dipertahankan', 'jalankan backend lalu scan ulang', '#7f1d1d')
-    return true
-  }
-  setBadge(`Cek jawaban: sisa ${queue.length}`, `${nComments} komentar — kembali ke feed…`, '#166534')
-
-  // fase reply selesai utk item ini; balik ke feed, item berikutnya diproses
-  // oleh boot() di feed yang mendeteksi worl_phase masih 'reply' + antrian tersisa
-  history.back()
-  // kalau balik lewat bfcache/SPA (script nggak di-reload), timer ini yg lanjut;
-  // kalau benar-benar navigasi penuh, konteks mati & timer hilang sendiri.
-  setTimeout(() => { if (!stopped && state.running) mainLoop() }, 4000)
-  return true
-}
-
-// ================= SELESAI =================
+// ================= SELESAI (feed) =================
 
 async function finishCollect() {
   if (stopped) return // user hard-stop — jangan kirim ringkasan / mulai cek jawaban
@@ -547,6 +493,320 @@ async function endReplyPhase() {
   setTimeout(() => { try { badge.remove() } catch (_) {} }, 6000)
 }
 
+async function continueReplyCheck() {
+  const q = await chrome.storage.local.get('worl_reply_queue')
+  let queue = q.worl_reply_queue || []
+  const idx = queue.findIndex((x) => x.url && location.href.split('?')[0].replace(/\/$/, '') === x.url)
+  if (idx === -1) return false
+
+  await sleep(jitter(2500, 4000)) // tunggu render komentar
+  const allText = document.body.textContent || ''
+  const cm = allText.match(/([\d.,]+)\s*(?:komentar|comment)/i)
+  const nComments = cm ? parseInt(cm[1].replace(/[.,]/g, ''), 10) || 0 : 0
+
+  let firstReplyIso = null
+  // abbr pertama di halaman = waktu POST-nya sendiri; komentar datang sesudahnya.
+  // Ambil kandidat ISO, buang yg <= waktu post, terakhir yg tersisa = komentar.
+  const isoCandidates = [...document.querySelectorAll('abbr[title]')]
+    .map((a) => parseAbbrTitle(a.getAttribute('title') || ''))
+    .filter(Boolean)
+  const postMs = queue[idx].posted_at ? new Date(queue[idx].posted_at).getTime() : null
+  const replies = isoCandidates.filter((iso) => !postMs || new Date(iso).getTime() > postMs)
+  if (replies.length) firstReplyIso = replies[0]
+
+  let latency = null
+  if (nComments > 0 && firstReplyIso && queue[idx].posted_at) {
+    latency = Math.max(0, Math.round((new Date(firstReplyIso) - postMs) / 60000))
+  }
+
+  const sent = await send({
+    site: 'facebook_feed',
+    keyword: state.keyword || '(grup)',
+    page_url: location.href,
+    type: 'question_post',
+    items: [{
+      id: queue[idx].id,
+      url: queue[idx].url,
+      answered: nComments > 0,
+      first_reply_latency_minutes: latency,
+      reply_check_at: new Date().toISOString(),
+    }],
+  })
+  if (sent) {
+    queue.splice(idx, 1)
+    await chrome.storage.local.set({ worl_reply_queue: queue })
+  } else {
+    // backend mati — stop fase reply, antrian dipertahankan (jangan loop tak berujung)
+    await endReplyPhase()
+    setBadge('Backend mati! antrian cek-jawaban dipertahankan', 'jalankan backend lalu scan ulang', '#7f1d1d')
+    return true
+  }
+  setBadge(`Cek jawaban: sisa ${queue.length}`, `${nComments} komentar — kembali ke feed…`, '#166534')
+
+  // fase reply selesai utk item ini; balik ke feed, item berikutnya diproses
+  // oleh boot() di feed yang mendeteksi worl_phase masih 'reply' + antrian tersisa
+  history.back()
+  // kalau balik lewat bfcache/SPA (script nggak di-reload), timer ini yg lanjut;
+  // kalau benar-benar navigasi penuh, konteks mati & timer hilang sendiri.
+  setTimeout(() => { if (!stopped && state.running) mainLoop() }, 4000)
+  return true
+}
+
+// =====================================================================
+// MODE MARKETPLACE: PENGUMPUL HARGA KOMPONEN BEKAS
+// =====================================================================
+
+// Daftar query komponen — sinkron dengan backend app/data/query_list.json
+// (31 GPU + 12 CPU pasar Indonesia). Update manual kalau daftar backend berubah.
+const MARKET_QUERIES = [
+  // GPU
+  'RTX 3050', 'RTX 3060', 'RTX 3060 Ti', 'RTX 3070', 'RTX 4060', 'RTX 4060 Ti',
+  'RTX 4070', 'RX 5500 XT', 'RX 5600 XT', 'RX 5700', 'RX 5700 XT', 'RX 6400',
+  'RX 6500 XT', 'RX 6600', 'RX 6600 XT', 'RX 6650 XT', 'RX 6700 XT', 'RX 6750 XT',
+  'RX 6800', 'RX 6800 XT', 'RX 6900 XT', 'RX 6950 XT', 'RX 7600', 'RX 7600 XT',
+  'RX 7700 XT', 'RX 7800 XT', 'RX 7900', 'RX 7900 XT', 'RX 9060 XT', 'RX 9070', 'RX 9070 XT',
+  // CPU
+  'Ryzen 5 5600', 'Ryzen 5 7600', 'Ryzen 7 7700', 'Ryzen 5 3600', 'Ryzen 5 5500',
+  'Core i5 12400', 'Core i5 13400', 'Core i5 11400', 'Core i5 10400',
+  'Core i7 12700', 'Core i7 13700', 'Core i7 11700',
+]
+
+// Parse "IDR3,700,000" (format marketplace) / "Rp3.750.000" -> integer rupiah; null kalau bukan.
+// Kedua format: separator (titik/koma) adalah pemisah ribuan, langsung dibuang.
+function parseRp(text) {
+  const t = (text || '').replace(/\u00a0/g, ' ').trim()
+  const m = t.match(/^(?:idr|rp)\s*([\d.,\s]+)/i)
+  if (!m) return null
+  const digits = m[1].replace(/[.,\s]/g, '')
+  if (!digits) return null
+  const val = parseInt(digits, 10)
+  return isFinite(val) ? val : null
+}
+
+// Ekstrak satu card listing marketplace.
+// Struktur asli (hasil probe DOM 2026-08-24): leaf spans dalam urutan dokumen =
+// [badge waktu opsional "Just listed", IMG, HARGA "IDR3,700,000", JUDUL, LOKASI].
+// Harga = span leaf pertama yang match ^(idr|rp); judul = span setelah harga;
+// lokasi = span terakhir.
+function extractMarketCard(cardEl, query) {
+  const link = cardEl.matches('a[href]') ? cardEl : cardEl.querySelector('a[href*="/marketplace/item/"]')
+  if (!link) return null
+  const href = link.href || ''
+  if (!href.includes('/marketplace/item/')) return null
+  const scope = cardEl.matches('a[href]') ? cardEl.parentElement || cardEl : cardEl
+
+  const texts = [...scope.querySelectorAll('span')]
+    .filter((s) => !s.children.length)
+    .map((s) => smartText(s))
+    .filter((t) => t && t.length < 200)
+
+  let title = ''
+  let priceText = ''
+  let price = null
+  let priceIdx = -1
+  for (let i = 0; i < texts.length; i++) {
+    if (/^(idr|rp)\s?[\d.,]/i.test(texts[i])) {
+      priceText = texts[i]
+      price = parseRp(texts[i])
+      priceIdx = i
+      break
+    }
+  }
+  // judul: teks non-harga pertama SETELAH harga (sebelum harga cuma badge "Just listed")
+  for (let i = priceIdx + 1; i < texts.length; i++) {
+    if (/^(just|baru saja)/i.test(texts[i])) continue
+    title = texts[i]
+    break
+  }
+  // lokasi: leaf terakhir selain harga/judul
+  location = texts.length > priceIdx + 2 ? texts[texts.length - 1] : ''
+
+  if (!price || !title || price < 50_000) return null // tanpa harga/judul = sampah
+  const idMatch = href.match(/\/marketplace\/item\/(\d+)/)
+  const id = idMatch ? idMatch[1] : 'mk:' + hashStr(href.split('?')[0])
+  return {
+    id,
+    name: (query + ' — ' + title).slice(0, 300),
+    price_text: priceText,
+    price_rp: price,
+    description: title,
+    location,
+    category: query,
+    url: href.split('?')[0],
+  }
+}
+
+// Scan semua card marketplace yang tampak sekarang (collect-as-you-go).
+async function scanMarketplace(query) {
+  if (stopped || !state.running || state.mode !== 'fb_marketplace') return
+  // kandidat card: anchor langsung ke item ATAU container dgn anchor di dalamnya
+  const anchors = [...document.querySelectorAll('a[href*="/marketplace/item/"]')]
+  const seenEls = new Set()
+  for (const a of anchors) {
+    try {
+      const cardEl = a.parentElement && a.parentElement.querySelector('img') ? a.parentElement : a
+      if (seenEls.has(cardEl)) continue
+      seenEls.add(cardEl)
+      const item = extractMarketCard(cardEl, query)
+      if (!item) continue
+      if (await seenBefore(item.id)) continue
+      const stats = await bumpStats('pcQuestions')
+      await send({
+        site: 'facebook_marketplace',
+        keyword: query,
+        page_url: location.href,
+        type: 'marketplace_listing',
+        items: [item],
+      })
+      setBadge(
+        `▶ ${query}: ${stats.pcQuestions} listing total`,
+        `query ${idxOfQuery(query) + 1}/${MARKET_QUERIES.length}`,
+        '#166534',
+      )
+      chrome.storage.local.set({ worl_progress: marketProgressText() })
+    } catch (_) {}
+  }
+}
+
+// posisi query saat ini dalam antrian (untuk badge)
+let QUEUE_INDEX = { q: '', i: 0 }
+function idxOfQuery(q) {
+  return QUEUE_INDEX.i
+}
+
+// ================= RUNNER MULTI-QUERY MARKETPLACE =================
+// Satu query = satu navigasi penuh (SPA). Setelah scroll mentok -> query berikutnya.
+// Progres disimpan di storage supaya aman reload/re-inject content script.
+
+const MKEY = {
+  queue: 'worl_mkt_queue',       // array query tersisa
+  current: 'worl_mkt_current',   // query yang sedang dipindai
+  counts: 'worl_mkt_counts',     // {query: jumlah listing}
+}
+
+function marketProgressText() {
+  // dipanggil sinkron tanpa await; badge sudah menampilkan progres live.
+  return 'marketplace: lihat badge'
+}
+
+async function marketStart() {
+  const fullQueue = [...MARKET_QUERIES]
+  await chrome.storage.local.set({
+    [MKEY.queue]: fullQueue,
+    [MKEY.counts]: {},
+    worl_stats: { scanned: 0, questions: 0, pcQuestions: 0 },
+  })
+  setBadge('Marketplace: mulai', `${MARKET_QUERIES.length} query di antrian`, '#1e3a8a')
+  await marketNext()
+}
+
+async function marketNext() {
+  const q = await chrome.storage.local.get(MKEY.queue)
+  const queue = q[MKEY.queue] || []
+  if (!queue.length) {
+    await marketFinish()
+    return
+  }
+  const current = queue[0]
+  await chrome.storage.local.set({ [MKEY.current]: current, [MKEY.queue]: queue })
+  const url = 'https://www.facebook.com/marketplace/search/?query=' + encodeURIComponent(current)
+  setBadge('Marketplace', `menuju: ${current}`, '#1e3a8a')
+  chrome.storage.local.set({ worl_progress: `Marketplace — menuju query: ${current}` })
+  // SPA navigation: FB handle sendiri; content script tetap hidup.
+  // Kalau ini load pertama di halaman lain, location.assign bikin re-inject — boot() lanjutkan.
+  if (location.href.startsWith('https://www.facebook.com/marketplace/search')) {
+    history.replaceState(null, '', url)
+    // pancing FB router supaya render hasil query baru; fallback reload kalau SPA diam
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    setTimeout(async () => {
+      if (!location.href.includes('query=') || location.href === url) return
+      // URL tidak berubah sesuai target -> paksa reload penuh
+      if (decodeURIComponent((location.href.match(/query=([^&]+)/) || [])[1] || '') !== current) {
+        location.assign(url)
+      }
+    }, 2500)
+  } else {
+    location.assign(url)
+  }
+}
+
+async function runMarketCollector() {
+  const st = await chrome.storage.local.get([MKEY.current, MKEY.queue])
+  const current = st[MKEY.current]
+  const queueNow = st[MKEY.queue] || []
+  if (!current) { await marketNext(); return }
+  QUEUE_INDEX = { q: current, i: MARKET_QUERIES.length - queueNow.length }
+
+  setBadge('Marketplace: ' + current, `query ${QUEUE_INDEX.i + 1}/${MARKET_QUERIES.length} — render awal…`, '#1e3a8a')
+  await sleep(jitter(2600, 3400))
+
+  mo = new MutationObserver(() => {
+    clearTimeout(mo._t)
+    mo._t = setTimeout(() => scanMarketplace(current), 700)
+  })
+  mo.observe(document.body, { childList: true, subtree: true })
+
+  const startedAt = Date.now()
+  const TIME_LIMIT_MS = 3 * 60 * 1000 // 3 menit per query cukup utk ~30-60 card
+  let idle = 0
+  while (!stopped && state.on && state.running) {
+    const se = document.scrollingElement || document.documentElement
+    const before = se.scrollTop
+    se.scrollTop = before + 900
+    await sleep(jitter(2300, 3200)) // render floor FB (pengalaman feed v7)
+    await scanMarketplace(current)
+
+    const moved = (document.scrollingElement || se).scrollTop - before
+    if (moved < 40) {
+      idle++
+      if (idle >= 3) break // hasil habis / throttle — lanjut query berikutnya
+    } else idle = 0
+    if (Date.now() - startedAt >= TIME_LIMIT_MS) break
+  }
+
+  mo?.disconnect()
+  // catat jumlah utk query ini lalu lanjut
+  const done = ((await chrome.storage.local.get(STATS_KEY))[STATS_KEY] || {}).pcQuestions || 0
+  const countsFinal = (await chrome.storage.local.get(MKEY.counts))[MKEY.counts] || {}
+  const prevQueryCount = countsFinal[current] || 0
+  const perQuery = done - Object.entries(countsFinal).reduce((a, [, v]) => a + v, 0) + prevQueryCount
+  countsFinal[current] = Math.max(0, perQuery)
+  await chrome.storage.local.set({ [MKEY.counts]: countsFinal })
+  await send({
+    site: 'facebook_marketplace',
+    keyword: current,
+    page_url: location.href,
+    type: 'session_summary',
+    items: [{ name: `SELESAI QUERY: ${current}`, description: `listing query ini: ${countsFinal[current]}`, url: location.href }],
+  })
+  setBadge(`✓ ${current}`, `${countsFinal[current]} listing — lanjut…`, '#166534')
+  chrome.storage.local.set({ worl_progress: `✓ ${current}: ${countsFinal[current]} listing` })
+  // hapus query pertama dari antrian lalu lanjut
+  const qq = await chrome.storage.local.get(MKEY.queue)
+  const queue = (qq[MKEY.queue] || []).slice(1)
+  await chrome.storage.local.set({ [MKEY.queue]: queue, [MKEY.current]: null })
+  await marketNext()
+}
+
+async function marketFinish() {
+  const counts = (await chrome.storage.local.get(MKEY.counts))[MKEY.counts] || {}
+  const total = Object.values(counts).reduce((a, b) => a + b, 0)
+  const filled = Object.values(counts).filter((n) => n > 0).length
+  await send({
+    site: 'facebook_marketplace',
+    keyword: '(semua query)',
+    page_url: location.href,
+    type: 'session_summary',
+    items: [{
+      name: `RINGKASAN MARKETPLACE: ${total} listing dari ${filled}/${MARKET_QUERIES.length} query`,
+      description: JSON.stringify(counts),
+      url: location.href,
+    }],
+  })
+  setBadge(`Selesai ✓ ${total} listing`, `${filled}/${MARKET_QUERIES.length} query — cek folder hasil`, '#166534')
+  cleanupScan()
+}
+
 // ================= BOOT =================
 
 function finishSession() {
@@ -556,6 +816,17 @@ function finishSession() {
 
 async function mainLoop() {
   if (!state.on || !state.running || stopped) return
+
+  if (state.mode === 'fb_marketplace') {
+    // resume-safe: kalau antrian belum ada -> mulai baru; kalau ada -> lanjut query sekarang
+    const q = await chrome.storage.local.get(MKEY.queue)
+    if (!(q[MKEY.queue] || []).length && !(await chrome.storage.local.get(MKEY.current))[MKEY.current]) {
+      await marketStart()
+    } else {
+      await runMarketCollector()
+    }
+    return
+  }
   if (state.mode !== 'fb_feed') { finishSession(); return }
 
   // Fase cek-jawaban aktif? (diset finishCollect sebelum navigasi pertama)
@@ -584,7 +855,9 @@ async function mainLoop() {
 async function boot() {
   if (!stopped) return
   stopped = false
+  window.worlPing = () => true // penanda versi script utk popup (ensureContentScript)
   ensureBadge()
+  setBadge('WorL siap', state.mode === 'fb_marketplace' ? 'mode marketplace — menunggu mulai…' : 'menunggu…')
   mainLoop()
 }
 

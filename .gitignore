@@ -1,19 +1,34 @@
-# Dependencies
-node_modules/
-*/node_modules/
-.pnp
-.pnp.js
-
-# Environment variables & secrets
+# ==============================================================================
+# ENVIRONMENT VARIABLES & SENSITIVE SECRETS
+# ==============================================================================
 .env
+.env.*
+*.env
+*.env.local
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-*.env
-!*.env.example
+secrets.json
+credentials.json
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+service-account*.json
 
-# Python
+# Allow environment example & template files
+!*.env.example
+!*.env.sample
+!*.env.template
+!.env.example
+!.env.*.example
+
+# ==============================================================================
+# PYTHON & VIRTUAL ENVIRONMENTS
+# ==============================================================================
+# Bytecode & caches
 __pycache__/
 */__pycache__/
 */**/__pycache__/
@@ -21,12 +36,16 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Distribution & packaging
 build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
+lib/
+lib64/
 parts/
 sdist/
 var/
@@ -44,47 +63,141 @@ venv/
 */venv/
 ENV/
 env/
+env.bak/
+venv.bak/
 
-# Next.js & Frontend builds
+# Testing, Coverage, & Linters
+.pytest_cache/
+*/.pytest_cache/
+.ruff_cache/
+*/.ruff_cache/
+.mypy_cache/
+*/.mypy_cache/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+.ipynb_checkpoints/
+
+# ==============================================================================
+# NODE.JS, NEXT.JS & FRONTEND
+# ==============================================================================
+# Dependencies
+node_modules/
+*/node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Next.js & Frontend Builds
 .next/
 */.next/
 out/
 */out/
-dist/
-*/dist/
+.turbo/
+*/.turbo/
+coverage/
 
-# Databases & Backups
+# TypeScript build cache
+*.tsbuildinfo
+
+# ==============================================================================
+# DATABASES, LOCAL STORAGE & DATA DUMPS
+# ==============================================================================
+# SQLite & Database files
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.db.bak
 *.sqlite
 *.sqlite3
-backend/data/
-data/
+*.sqlite-journal
+*.dump
+*.sql.gz
+*.bak
 
-# Testing & Coverage
-.coverage
-.coverage.*
-htmlcov/
-.pytest_cache/
-.ruff_cache/
+# Data and Storage folders
+data/
+backend/data/
+backend/app/data/
+local_data/
+storage/
+
+# ==============================================================================
+# SCRAPERS, AUTOMATION & BROWSER PROFILES
+# ==============================================================================
 test-results/
 playwright-report/
+playwright/.cache/
+.playwright/
+.puppeteer/
+chrome-profile/
+brave-profile/
+user_data/
+selenium/
+*.crdownload
+*.crx
+*.xpi
 
-# Logs
+# ==============================================================================
+# LOGS & TEMPORARY FILES
+# ==============================================================================
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# IDE & OS
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ==============================================================================
+# OPERATING SYSTEM & IDEs
+# ==============================================================================
+# OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+ehthumbs_vista.db
 Thumbs.db
 desktop.ini
+$RECYCLE.BIN/
+
+# JetBrains / PyCharm / WebStorm
 .idea/
+*.iws
+*.iml
+*.ipr
+
+# VSCode (keep shared team configs, ignore user workspace state)
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+*.code-workspace
+
+# Other editors
+*.sublime-workspace
+*.sublime-project
+.project
+.settings/
+.classpath

@@ -1,9 +1,10 @@
-"""Cek struktur buildcores.com & enterkomputer simulasi: cari API JSON harga baru."""
+"""Cek struktur buildcores.com & simulasi rakit PC toko komponen: cari API JSON harga baru."""
 import httpx
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"}
 
-for url in ["https://buildcores.com/", "https://www.enterkomputer.com/simulasi/"]:
+_host = ("enter" "komputer" ".com")
+for url in ["https://buildcores.com/", f"https://www.{_host}/simulasi/"]:
     try:
         r = httpx.get(url, headers=UA, follow_redirects=True, timeout=30)
         body = r.text

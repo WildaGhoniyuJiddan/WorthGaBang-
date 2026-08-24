@@ -24,6 +24,10 @@ def scraper_for(source: str) -> Scraper:
         return ShopeeScraper(cookie=settings.shopee_cookie, timeout=timeout)
     if source == "facebook":
         return FacebookMarketplaceScraper(cookie=settings.facebook_cookie, timeout=timeout)
+    if source == "komponen_retail":
+        from .scrapers.komponen_retail import KomponenRetailScraper
+
+        return KomponenRetailScraper(timeout=timeout)
     raise ValueError(f"Sumber scraper tidak dikenal: {source}")
 
 
@@ -103,3 +107,8 @@ def run_weekly_queries() -> list[ScrapeRun]:
 
 def run_daily_facebook() -> list[ScrapeRun]:
     return [run_source("facebook", query, schedule="daily") for query in get_settings().query_list]
+
+
+# ponytail: harga retail bergerak lambat — cukup refresh sebulan sekali tiap tanggal 1.
+def run_monthly_komponen_retail() -> list[ScrapeRun]:
+    return [run_source("komponen_retail", query, schedule="monthly") for query in get_settings().query_list]
