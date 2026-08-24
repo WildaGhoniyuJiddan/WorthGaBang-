@@ -22,7 +22,7 @@ def scraper_for(source: str) -> Scraper:
         )
     if source == "shopee":
         return ShopeeScraper(cookie=settings.shopee_cookie, timeout=timeout)
-    if source == "facebook":
+    if source == "facebook_marketplace":
         return FacebookMarketplaceScraper(cookie=settings.facebook_cookie, timeout=timeout)
     if source == "komponen_retail":
         from .scrapers.komponen_retail import KomponenRetailScraper
@@ -79,7 +79,7 @@ def run_cycle(query: str | None = None) -> dict:
     for source in ("tokopedia", "shopee"):
         result["runs"].append(run_source(source, query, schedule="manual"))
 
-    facebook_run = run_source("facebook", query, schedule="manual")
+    facebook_run = run_source("facebook_marketplace", query, schedule="manual")
     result["runs"].append(facebook_run)
     if facebook_run.status != "success":
         tokopedia_run = result["runs"][0]
@@ -106,7 +106,7 @@ def run_weekly_queries() -> list[ScrapeRun]:
 
 
 def run_daily_facebook() -> list[ScrapeRun]:
-    return [run_source("facebook", query, schedule="daily") for query in get_settings().query_list]
+    return [run_source("facebook_marketplace", query, schedule="daily") for query in get_settings().query_list]
 
 
 # ponytail: harga retail bergerak lambat — cukup refresh sebulan sekali tiap tanggal 1.

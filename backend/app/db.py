@@ -20,7 +20,7 @@ def _engine_kwargs(database_url: str) -> dict:
 settings = get_settings()
 database_url = settings.database_url
 if database_url.startswith("sqlite:///./"):
-    database_path = Path(__file__).resolve().parents[2] / database_url.removeprefix("sqlite:///./")
+    database_path = Path(__file__).resolve().parents[1] / database_url.removeprefix("sqlite:///./")
     database_path.parent.mkdir(parents=True, exist_ok=True)
     database_url = f"sqlite:///{database_path.as_posix()}"
 

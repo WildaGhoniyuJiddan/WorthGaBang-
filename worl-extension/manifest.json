@@ -1,19 +1,35 @@
 {
   "manifest_version": 3,
   "name": "WorL Collector",
-  "version": "4.0.3",
+  "version": "4.3.3",
   "description": "Pengumpul pertanyaan 'worth it?' + harga komponen bekas (FB Marketplace) -> dataset lokal.",
-  "permissions": ["storage", "tabs", "scripting"],
-  "host_permissions": ["http://localhost:8787/*", "https://www.facebook.com/*", "https://web.facebook.com/*"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:8787/*",
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "WorL Collector"
   },
   "content_scripts": [
     {
-      "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*"
+      ],
+      "js": [
+        "probe.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

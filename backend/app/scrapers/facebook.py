@@ -6,7 +6,7 @@ from ..services.parsing import parse_price
 
 
 class FacebookMarketplaceScraper(Scraper):
-    source = "facebook"
+    source = "facebook_marketplace"
 
     def __init__(self, cookie: str = "", timeout: int = 30):
         super().__init__(timeout)

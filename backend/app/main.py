@@ -109,7 +109,7 @@ def ingest_source(
     x_job_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    if source not in {"tokopedia", "shopee", "facebook"}:
+    if source not in {"facebook_marketplace", "tokopedia"}:
         raise HTTPException(status_code=400, detail="Unsupported source")
     if settings.internal_job_token and x_job_token != settings.internal_job_token:
         raise HTTPException(status_code=401, detail="Invalid job token")

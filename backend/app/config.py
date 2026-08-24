@@ -1,12 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATABASE_URL = f"sqlite:///{(BACKEND_ROOT / 'data' / 'hargapas.db').as_posix()}"
+DEFAULT_PROCESSED_HARDWARE_DIR = str(BACKEND_ROOT / "data" / "used_hardware")
 
 
 class Settings(BaseSettings):
     app_name: str = "HargaPas API"
     environment: str = "development"
-    database_url: str = "sqlite:///./data/hargapas.db"
+    database_url: str = DEFAULT_DATABASE_URL
+    processed_hardware_dir: str = DEFAULT_PROCESSED_HARDWARE_DIR
     cors_origins: str = "http://localhost:3000"
     internal_job_token: str = ""
     jina_reader_base_url: str = "https://r.jina.ai/http://"

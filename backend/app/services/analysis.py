@@ -128,8 +128,10 @@ def _freshness_for_source(session: Session, source: str) -> Freshness:
     )
 
 
-def freshness(session: Session, preferred_source: str = "tokopedia") -> Freshness:
-    candidates = ["tokopedia", "shopee", "facebook"]
+def freshness(session: Session, preferred_source: str = "facebook_marketplace") -> Freshness:
+    # ponytail: source names match raw_listings values (facebook_marketplace dari
+    # ekstensi, tokopedia dari scraper); tambah shopee kalau scraper-nya live.
+    candidates = ["facebook_marketplace", "tokopedia"]
     fresh = [_freshness_for_source(session, source) for source in candidates]
     available = [item for item in fresh if item.last_updated_at is not None and not item.is_stale]
     if available:
@@ -140,7 +142,7 @@ def freshness(session: Session, preferred_source: str = "tokopedia") -> Freshnes
 
 
 def all_freshness(session: Session) -> dict[str, Freshness]:
-    return {source: _freshness_for_source(session, source) for source in ("tokopedia", "shopee", "facebook")}
+    return {source: _freshness_for_source(session, source) for source in ("facebook_marketplace", "tokopedia")}
 
 
 def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
@@ -246,5 +248,5 @@ def analyze(session: Session, request: AnalyzeRequest):
                         condition="new",
                     )
                 ]
-    selected_source = "tokopedia" if request.mode == "pc" else (comparisons[0].source if comparisons else "tokopedia")
+    selected_source = comparisons[0].source if comparisons else "facebook_marketplace"
     return result, comparisons, freshness(session, selected_source)
