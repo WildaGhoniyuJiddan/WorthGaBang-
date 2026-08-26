@@ -19,6 +19,41 @@ class AnalyzeRequest(BaseModel):
     condition: Optional[str] = Field(default="any", max_length=32)
 
 
+class BundleItem(BaseModel):
+    """Komponen dalam cek bundle: query model + harga item (opsional kalau bundle)."""
+
+    query: str = Field(min_length=2, max_length=255)
+    component_type: Optional[str] = Field(default="cpu", max_length=32)
+    price: Optional[int] = Field(default=None, gt=0)
+
+
+class BundleRequest(BaseModel):
+    """Cek worth-it paket bundling multi-komponen (mis. Mobo + CPU)."""
+
+    items: list[BundleItem] = Field(min_length=1, max_length=6)
+    bundle_price: int = Field(gt=0)
+    condition: Optional[str] = Field(default="any", max_length=32)
+
+
+class BundleItemBreakdown(BaseModel):
+    """Rincian 1 komponen dalam bundle: harga input vs referensi retail."""
+
+    query: str
+    component_type: str
+    price_input: Optional[int] = None
+    reference_price: int
+
+
+class BundleResponse(BaseModel):
+    bundle_price: int
+    reference_total: int
+    score: float
+    verdict: str
+    recommendation: str
+    savings_percent: float
+    items: list[BundleItemBreakdown]
+
+
 class Comparison(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,6 +63,15 @@ class Comparison(BaseModel):
     listing_url: Optional[str] = None
     similarity: float = Field(ge=0, le=1)
     condition: Optional[str] = None
+
+
+class Alternative(BaseModel):
+    """Kandidat benchmark lebih baik di harga serupa (PassMark)."""
+
+    name: str
+    score: int
+    est_price_idr: int
+    gain_percent: int
 
 
 class Freshness(BaseModel):
@@ -48,6 +92,7 @@ class AnalyzeResponse(BaseModel):
     reference_price: int
     price_delta_percent: float
     comparisons: list[Comparison]
+    alternatives: list[Alternative] = []
     freshness: Freshness
 
 

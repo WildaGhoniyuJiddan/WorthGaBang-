@@ -13,7 +13,10 @@ class Base(DeclarativeBase):
 
 def _engine_kwargs(database_url: str) -> dict:
     if database_url.startswith("sqlite"):
-        return {"connect_args": {"check_same_thread": False}}
+        # timeout: tunggu lock proses lain (pipeline PC & laptop jalan paralel);
+        # WAL biar reader gak diblokir writer.
+        return {"connect_args": {"check_same_thread": False, "timeout": 30},
+                "pool_pre_ping": True}
     return {"pool_pre_ping": True}
 
 
@@ -25,6 +28,19 @@ if database_url.startswith("sqlite:///./"):
     database_url = f"sqlite:///{database_path.as_posix()}"
 
 engine = create_engine(database_url, future=True, **_engine_kwargs(database_url))
+
+from sqlalchemy import event
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, _record):
+    if database_url.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 

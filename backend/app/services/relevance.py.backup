@@ -10,6 +10,7 @@ _BUILD_WORDS = (
     "desktop",
     "pc mini",
     "built up",
+    "fullset",
     "full set",
     "paket pc",
     "paket gaming",
@@ -29,31 +30,11 @@ _ACCESSORY_WORDS = (
     "case ",
     "casing",
     "adapter",
-    "adaptor",
+    "heatsink",
+    "heatsink",
     "cover ",
-    "enclosure",
-    "charger",
-    "baterai",
-    "battery",
-    "keyboard",
-    "mouse ",
-    "headset",
-    "tempered glass",
-    "hydrogel",
-    "skin ",
-    "sleeve",
-    "tas ",
-    "bag ",
 )
 _LAPTOP_WORDS = ("laptop", "notebook", "macbook", "vivobook", "ideapad", "thinkpad", "chromebook")
-
-# Penanda komponen AKTIF lain di judul. Dipakai utk section pasif (ram/storage/
-# motherboard): judul yang menyebut VGA/CPU spesifik = listing build/laptop/bundle,
-# bukan harga komponen lepas — penyebab bug "cari RAM dapat pembanding VGA".
-_GPU_MARKER_RE = re.compile(
-    r"\b(?:rtx|gtx)\s*\d{3,4}\b|\brx\s*\d{3,4}\b|\bvga\b|\bradeon\b|\bgeforce\b|\barc\s*a?\d*", re.IGNORECASE
-)
-_CPU_MARKER_RE = re.compile(r"\bcore\s*i[3579]\s*-?\s*\d{4,5}[a-z]{0,3}\b|\bryzen\s*[3579]\s*\d{4}[a-z]{0,3}\b", re.IGNORECASE)
 _LAPTOP_SERIES_RE = re.compile(
     r"\b(?:zephyrus|legion|nitro|predator|victus|omen|pavilion|katana|cyborg|loq|"
     r"tuf\s+[af]\s*\d{1,3}|rog\s+strix\s+(?:g|scar|hero)\s*\d{1,3})\b",
@@ -67,13 +48,6 @@ def component_type_from_query(query: str) -> str | None:
         return "gpu"
     if re.search(r"\b(?:ryzen\s*[3579]|core\s*i[3579])\s*-?\d{4,5}", text):
         return "cpu"
-    # Section pasif: RAM (ddr + kapasitas), storage, motherboard.
-    if re.search(r"\bram\b|\bmemori\b|\bmemory\b|\bddr[345]\b", text):
-        return "ram"
-    if re.search(r"\bssd\b|\bhdd\b|\bnvme\b|\bharddisk\b|\bhardisk\b|\bm\.?2\s*(?:sata|nvme)\b", text):
-        return "storage"
-    if re.search(r"\bmotherboard\b|\bmobo\b", text) or re.search(r"\b[a-z]\d{3,4}\w*-?m?\b", text):
-        return "motherboard"
     return None
 
 
@@ -84,40 +58,17 @@ def is_standalone_component_query(query: str) -> bool:
 
 def _component_signature(value: str, component_type: str | None) -> tuple[str, str] | None:
     text = (value or "").lower()
-    if component_type == "gpu":
-        # Suffix Ti/Super/XT = produk BEDA ("RTX 4060" != "RTX 4060 Ti",
-        # harga bisa 2x). Masuk signature supaya mismatch = gugur.
-        match = re.search(r"\b(rtx|gtx|rx)\s*(\d{3,4})\s*(ti|super|xt)?\b", text)
+        match = re.search(r"(rtx|gtx|rx)\s*(\d{3,4})\s*(?:ti|super|xt)?", text)
+        match = re.search(r"(rtx|gtx|rx)\s*(\d{3,4})\s*(?:ti|super|xt)?", text)
         if match:
-            return "gpu", f"{match.group(1)}{match.group(2)}{match.group(3) or ''}"
-    if component_type == "cpu":
-        # Suffix huruf (X/F/K/H) = SKU beda ("5600" != "5600X").
-        match = re.search(r"\b(ryzen\s*[3579]|core\s*i[3579])\s*-?\s*(\d{4,5})([a-z]{0,2})?\b", text)
+            return "gpu", f"{match.group(1)}{match.group(2)}"
+        match = re.search(r"(ryzen\s*[3579]|core\s*i[3579])\s*-?(\d{4,5})", text)
+        match = re.search(r"\\b(ryzen\\s*[3579]|core\\s*i[3579])\\s*-?(\\d{4,5})\\b", text)
         if match:
-            return "cpu", re.sub(r"\s+", "", match.group(1)) + match.group(2) + (match.group(3) or "")
-    if component_type == "ram":
-        # Signature RAM = gen DDR + kapasitas. "ddr4" vs "ddr6" (VRAM kartu) beda
-        # signature -> judul VGA otomatis gugur lewat pemeriksaan mismatch.
-        ddr = re.search(r"ddr\s*([345])", text)
-        gb = re.search(r"(\d{1,2})\s*gb\b", text)
-        if ddr and gb:
-            return "ram", f"ddr{ddr.group(1)} {gb.group(1)}gb"
-    if component_type == "storage":
-        # Signature storage = jenis + kapasitas. "1tb ssd" != "1tb hdd".
-        kind = "ssd" if re.search(r"\b(ssd|nvme|m\.?2)\b", text) else ("hdd" if re.search(r"\bhdd\b|\bharddisk\b|\bhardisk\b", text) else None)
-        if kind:
-            gb = re.search(r"(\d{1,3})\s*gb\b", text)
-            tb = re.search(r"(\d)\s*tb\b", text)
-            size = f"{gb.group(1)}gb" if gb else (f"{tb.group(1)}tb" if tb else None)
-            if size:
-                return "storage", f"{kind} {size}"
-    if component_type == "motherboard":
-        # Signature chipset: B650 != X870 != B760. Suffix M/E diabaikan
-        # (B650M masih sekelas B650).
-        chipset = re.search(r"\b([abxzi]\d{3})[a-z]{0,2}\b", text)
-        if chipset:
-            return "motherboard", chipset.group(1)
+            return "cpu", re.sub(r"\\s+", "", match.group(1)) + match.group(2)
     return None
+
+
 def is_relevant_pc_listing(query: str, title: str, component_type: str | None = None) -> bool:
     """Reject listings that mention a component but actually sell a build/accessory."""
     query_text = (query or "").lower()
@@ -129,33 +80,10 @@ def is_relevant_pc_listing(query: str, title: str, component_type: str | None = 
     if query_signature and title_signature and query_signature != title_signature:
         return False
 
-    # Section pasif (ram/storage/motherboard): hard-block judul yang jelas
-    # BUKAN komponen lepas — build PC, laptop, bundle, atau menyebut komponen
-    # aktif lain. Ini penyebab bug "cari RAM dapat pembanding VGA".
-    if resolved_type in {"ram", "storage", "motherboard"}:
-        if any(word in title_text for word in _LAPTOP_WORDS) or _LAPTOP_SERIES_RE.search(title_text):
-            return False
-        if any(word in title_text for word in _BUILD_WORDS):
-            return False
-        if _GPU_MARKER_RE.search(title_text) or _CPU_MARKER_RE.search(title_text):
-            return False
-        # Judul multi-item: pemisah "+" atau "|" hampir selalu bundling.
-        if re.search(r"\s[+|]\s", title_text):
-            return False
-        # RAM menempel tanpa spasi ("RAM32GB", "RAM 32GB") di judul laptop/AIO
-        # yang juga sebut CPU/storage = sistem lengkap, bukan modul lepas.
-        if resolved_type == "ram" and re.search(r"ram\s*\d+\s*gb\b.*\b(?:ssd|nvme|win|fhd|intel|core)\b|\b(?:ssd\d|ssd)\s*\d+\s*[gt]b\b", title_text):
-            return False
-
     if any(word in title_text for word in _BUILD_WORDS):
         return False
     if any(word in title_text for word in _ACCESSORY_WORDS):
         return False
-    if resolved_type == "laptop":
-        # Unit laptop harus menyebut kata/seri laptop — bukan VGA/charger
-        # yang kebetulan ikut ke index.
-        if not (any(word in title_text for word in _LAPTOP_WORDS) or _LAPTOP_SERIES_RE.search(title_text)):
-            return False
     if resolved_type in {"gpu", "cpu"}:
         # A standalone component title should not be a laptop or a generic PC.
         if any(word in title_text for word in _LAPTOP_WORDS) or _LAPTOP_SERIES_RE.search(title_text):

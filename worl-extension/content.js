@@ -199,18 +199,21 @@ async function runQuestionCollector() {
 // Query komponen bekas — sinkron app/data/query_list.json backend (43 query).
 
 const MARKET_QUERIES = [
-  // GPU (31)
-  'RTX 3050', 'RTX 3060', 'RTX 3060 Ti', 'RTX 3070', 'RTX 4060',
-  'RX 5500 XT', 'RX 5600 XT', 'RX 5700', 'RX 5700 XT', 'RX 6600',
-  'RX 6650 XT', 'RX 7600', 'Intel Arc A750', 'Intel Arc A770',
-  'GTX 1650', 'GTX 1660 Super', 'GTX 1070', 'GTX 1080', 'GTX 1080 Ti',
-  'RTX 2060', 'RTX 2060 Super', 'RTX 2070', 'RTX 2080 Super',
-  'RTX 3070 Ti', 'RTX 3080', 'RTX 3090', 'RTX 4060 Ti', 'RTX 4070',
-  'RX 9070 XT', 'RX 7800 XT', 'Arc B580',
-  // CPU (12)
-  'Ryzen 5 5600', 'Ryzen 5 7600', 'Core i5 12400', 'Core i5 13400',
-  'Core i7 12700', 'Core i7 13700', 'Ryzen 7 7700', 'Ryzen 5 3600',
-  'Ryzen 5 5500', 'Core i5 10400', 'Core i5 11400', 'Core i7 11700',
+  // RAM (12) — kelas kapasitas/generik/speed utama
+  'RAM DDR3 4GB', 'RAM DDR3 8GB',
+  'RAM DDR4 4GB', 'RAM DDR4 8GB', 'RAM DDR4 16GB', 'RAM DDR4 32GB',
+  'RAM DDR5 8GB', 'RAM DDR5 16GB', 'RAM DDR5 32GB',
+  'RAM DDR4 3200MHz', 'RAM DDR5 5600MHz',
+  'RAM Laptop DDR4',
+  // SSD/HDD (10) — interface+kapasitas menentukan harga
+  'SSD SATA 120GB', 'SSD SATA 240GB', 'SSD SATA 480GB', 'SSD SATA 1TB',
+  'SSD NVMe 250GB', 'SSD NVMe 500GB', 'SSD NVMe 1TB', 'SSD NVMe 2TB',
+  'SSD NVMe Gen3', 'SSD NVMe Gen4',
+  // Motherboard (8) — socket/chipset generasi utama
+  'Motherboard LGA 1155', 'Motherboard LGA 1150',
+  'Motherboard LGA 1151', 'Motherboard LGA 1200',
+  'Motherboard LGA 1700', 'Motherboard AM3+',
+  'Motherboard AM4', 'Motherboard AM5'
 ]
 
 // Parse "IDR3,700,000" (format marketplace) / "Rp3.750.000" -> integer rupiah; null kalau bukan.

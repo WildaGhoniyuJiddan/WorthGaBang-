@@ -8,10 +8,22 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import Base, engine, get_db
 from .models import AnalysisLog, LaptopUnit, PCComponent
-from .schemas import AnalyzeRequest, AnalyzeResponse, FreshnessResponse, IngestRequest, LaptopResponse, PCComponentResponse
+from .schemas import (
+    Alternative,
+    AnalyzeRequest,
+    AnalyzeResponse,
+    BundleRequest,
+    BundleResponse,
+    FreshnessResponse,
+    IngestRequest,
+    LaptopResponse,
+    PCComponentResponse,
+)
 from .services.ingestion import ListingInput, ingest_listings
-from .services.analysis import all_freshness, analyze
+from .services.analysis import all_freshness, analyze, new_price_anchor
+from .services.scoring import score_price
 from .services.coverage import report_pc_coverage
+from .services.suggest import suggest_components
 
 
 @asynccontextmanager
@@ -39,7 +51,7 @@ def health(db: Session = Depends(get_db)) -> dict:
 
 @app.post("/api/v1/analyze", response_model=AnalyzeResponse)
 def analyze_price(payload: AnalyzeRequest, db: Session = Depends(get_db)) -> AnalyzeResponse:
-    result, comparisons, freshness = analyze(db, payload)
+    result, comparisons, freshness, alternatives = analyze(db, payload)
     db.add(AnalysisLog(mode=payload.mode, input_query=payload.query, result_score=result.score))
     db.commit()
     return AnalyzeResponse(
@@ -52,7 +64,64 @@ def analyze_price(payload: AnalyzeRequest, db: Session = Depends(get_db)) -> Ana
         reference_price=result.reference_price,
         price_delta_percent=result.delta_percent,
         comparisons=comparisons,
+        alternatives=[Alternative(**alt) for alt in alternatives],
         freshness=freshness,
+    )
+
+
+@app.post("/api/v1/analyze-bundle", response_model=BundleResponse)
+def analyze_bundle(payload: BundleRequest) -> BundleResponse:
+    """Worth-it cek paket bundling (mis. Mobo + CPU).
+
+    Referensi = jumlah harga retail BARU per komponen (katalog EK / konversi
+    USD street). Harga per item opsional: kalau diisi dipakai sebagai pembanding
+    transparan di breakdown, referensi tetap dari katalog.
+    """
+    breakdown = []
+    reference_total = 0
+    missing: list[str] = []
+    for item in payload.items:
+        ctype = item.component_type or "cpu"
+        anchor = new_price_anchor(item.query, ctype)
+        if not anchor:
+            missing.append(item.query)
+            continue
+        reference_total += anchor
+        breakdown.append(
+            {
+                "query": item.query,
+                "component_type": ctype,
+                "price_input": item.price,
+                "reference_price": anchor,
+            }
+        )
+    if not reference_total:
+        detail = f"Harga referensi tidak ditemukan untuk: {', '.join(missing)}" if missing else "Referensi tidak tersedia."
+        raise HTTPException(status_code=422, detail=detail)
+
+    ratio = payload.bundle_price / reference_total
+    savings_percent = round((1 - ratio) * 100, 1)
+    result = score_price(payload.bundle_price, [reference_total])
+    if savings_percent >= 10:
+        rec = (
+            f"Paket ini hemat {savings_percent}% dibeli bundling "
+            f"(total normal Rp{reference_total:,}). Worth it."
+        )
+    elif savings_percent >= 0:
+        rec = f"Bundling cuma hemat {savings_percent}% — masuk akal kalau memang butuh keduanya."
+    else:
+        rec = (
+            f"Paket lebih mahal {abs(savings_percent)}% daripada beli terpisah "
+            f"(total normal Rp{reference_total:,}). Pertimbangkan beli satuan."
+        )
+    return BundleResponse(
+        bundle_price=payload.bundle_price,
+        reference_total=reference_total,
+        score=result.score,
+        verdict=result.verdict,
+        recommendation=rec,
+        savings_percent=savings_percent,
+        items=breakdown,
     )
 
 
@@ -92,6 +161,18 @@ def laptop_catalog(
 @app.get("/api/v1/freshness", response_model=FreshnessResponse)
 def freshness(db: Session = Depends(get_db)) -> FreshnessResponse:
     return FreshnessResponse(sources=all_freshness(db))
+
+
+@app.get("/api/v1/suggest/{section}")
+def suggest(
+    section: str,
+    q: str = Query(default="", max_length=80),
+    limit: int = Query(default=8, ge=1, le=20),
+    condition: str = Query(default="any", pattern="^(baru|bekas|any)$"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Autocomplete per section; condition=baru (katalog retail) | bekas (marketplace)."""
+    return {"section": section, "suggestions": suggest_components(db, section, q, limit, condition)}
 
 
 @app.get("/api/v1/catalog/coverage")
@@ -156,3 +237,20 @@ def trigger_scrape(
             for run in result["runs"]
         ],
     }
+
+
+@app.post("/api/v1/jobs/pipeline/{name}")
+def trigger_pipeline(
+    name: str,
+    x_job_token: str | None = Header(default=None),
+) -> dict:
+    """Trigger pipeline pengumpulan harga BARU: 'pc' atau 'laptop' (blocking)."""
+    if settings.internal_job_token and x_job_token != settings.internal_job_token:
+        raise HTTPException(status_code=401, detail="Invalid job token")
+    from .jobs import run_pipeline_laptop, run_pipeline_pc
+
+    if name == "pc":
+        return run_pipeline_pc(progress=lambda m: None)
+    if name == "laptop":
+        return run_pipeline_laptop(progress=lambda m: None)
+    raise HTTPException(status_code=404, detail=f"Pipeline tidak dikenal: {name}")

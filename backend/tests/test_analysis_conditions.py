@@ -36,7 +36,7 @@ def test_new_condition_has_transparent_reference_fallback_when_catalog_is_empty(
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        result, comparisons, _ = analyze(
+        result, comparisons, _, _ = analyze(
             session,
             AnalyzeRequest(mode="pc", query="RTX 4090", price=30000000, component_type="gpu", condition="new"),
         )
