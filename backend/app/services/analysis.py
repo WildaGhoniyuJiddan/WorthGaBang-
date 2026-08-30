@@ -562,7 +562,7 @@ def analyze(session: Session, request: AnalyzeRequest):
     if (result.verdict == "data terbatas" or not comparisons) and request.condition != "second":
         ref_new = new_price_anchor(request.query, request.component_type)
         if ref_new:
-            result = score_price(request.price, [ref_new])
+            result = score_price(request.price, [ref_new], is_new_reference=True)
             if not comparisons:
                 comparisons = [
                     Comparison(
