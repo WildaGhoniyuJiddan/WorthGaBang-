@@ -490,8 +490,6 @@ def _laptop_benchmark_advice(request: AnalyzeRequest, comparisons, spec_map: dic
     Alternatif hanya dari unit nyata di database (bukan katalog global) supaya
     harga & ketersediaannya real. Return (recommendation_tambahan, alternatives).
     """
-    if result.verdict not in ("kemahalan", "ada opsi lebih baik"):
-        return "", []
     user_combo = laptop_combo_score(
         request.cpu or request.query,
         request.gpu or request.query,
@@ -523,30 +521,45 @@ def _laptop_benchmark_advice(request: AnalyzeRequest, comparisons, spec_map: dic
     if not alts:
         return "", []
     best = alts[0]
-    advice = (
-        f"Di harga segitu lebih baik {best['name']}: performa +{best['gain_percent']}% "
-        f"(dijual Rp{best['est_price_idr']:,}, skor combo {best['score']:,} vs {user_combo['score']:,})."
-    ).replace(",", ".")
+    est_price_str = f"{best['est_price_idr']:,}".replace(",", ".")
+    score_str = f"{best['score']:,}".replace(",", ".")
+    user_score_str = f"{user_combo['score']:,}".replace(",", ".")
+    if result.verdict in ("worth it", "wajar"):
+        advice = (
+            f"Ada alternatif unit dengan performa lebih tinggi di kisaran harga serupa: {best['name']} "
+            f"(performa +{best['gain_percent']}%, dijual Rp{est_price_str}, skor combo {score_str} vs {user_score_str})."
+        )
+    else:
+        advice = (
+            f"Di harga segitu lebih baik {best['name']}: performa +{best['gain_percent']}% "
+            f"(dijual Rp{est_price_str}, skor combo {score_str} vs {user_score_str})."
+        )
     return advice, alts
 
 
 def _benchmark_advice(request: AnalyzeRequest, result) -> tuple[str, list[dict]]:
-    """Advice PassMark utk verdict jelek: "di harga segitu lebih baik X (+N%)".
+    """Advice PassMark: "di harga segitu lebih baik X (+N%)" atau info alternatif performa.
 
     Return (recommendation_tambahan, alternatives). Kosong kalau model gak
     ketemu di katalog benchmark atau tidak ada kandidat yang layak.
     """
     ctype = request.component_type or component_type_from_query(request.query)
-    if result.verdict not in ("kemahalan", "ada opsi lebih baik"):
-        return "", []
     alts = better_alternatives(request.query, ctype, request.price, USD_TO_IDR)
     if not alts:
         return "", []
     best = alts[0]
-    advice = (
-        f"Di harga segitu lebih baik {best['name']}: performa +{best['gain_percent']}% "
-        f"(est. Rp{best['est_price_idr']:,}) dengan skor PassMark {best['score']:,}."
-    ).replace(",", ".")
+    est_price_str = f"{best['est_price_idr']:,}".replace(",", ".")
+    score_str = f"{best['score']:,}".replace(",", ".")
+    if result.verdict in ("worth it", "wajar"):
+        advice = (
+            f"Ada alternatif dengan performa lebih tinggi di kisaran harga serupa: {best['name']} "
+            f"(performa +{best['gain_percent']}%, est. Rp{est_price_str}, skor PassMark {score_str})."
+        )
+    else:
+        advice = (
+            f"Di harga segitu lebih baik {best['name']}: performa +{best['gain_percent']}% "
+            f"(est. Rp{est_price_str}) dengan skor PassMark {score_str}."
+        )
     return advice, alts
 
 
