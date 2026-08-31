@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import Base, engine, get_db
+from .security import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    require_job_token,
+)
 from .models import AnalysisLog, LaptopUnit, PCComponent
 from .schemas import (
     Alternative,
@@ -34,6 +39,8 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list or ["*"],
@@ -46,7 +53,7 @@ app.add_middleware(
 @app.get("/health")
 def health(db: Session = Depends(get_db)) -> dict:
     db.execute(select(1))
-    return {"status": "ok", "service": "hargapas-api", "environment": settings.environment}
+    return {"status": "ok", "service": "worthgabang-api", "environment": settings.environment}
 
 
 @app.post("/api/v1/analyze", response_model=AnalyzeResponse)
@@ -187,13 +194,11 @@ def catalog_coverage(
 def ingest_source(
     source: str,
     payload: IngestRequest,
-    x_job_token: str | None = Header(default=None),
+    _: str = Depends(require_job_token),
     db: Session = Depends(get_db),
 ) -> dict:
     if source not in {"facebook_marketplace", "tokopedia"}:
         raise HTTPException(status_code=400, detail="Unsupported source")
-    if settings.internal_job_token and x_job_token != settings.internal_job_token:
-        raise HTTPException(status_code=401, detail="Invalid job token")
     inserted = ingest_listings(
         db,
         source,
@@ -216,10 +221,8 @@ def ingest_source(
 @app.post("/api/v1/jobs/scrape")
 def trigger_scrape(
     query: str | None = Query(default=None, min_length=2),
-    x_job_token: str | None = Header(default=None),
+    _: str = Depends(require_job_token),
 ) -> dict:
-    if settings.internal_job_token and x_job_token != settings.internal_job_token:
-        raise HTTPException(status_code=401, detail="Invalid job token")
     from .jobs import run_cycle
 
     result = run_cycle(query)
@@ -242,11 +245,9 @@ def trigger_scrape(
 @app.post("/api/v1/jobs/pipeline/{name}")
 def trigger_pipeline(
     name: str,
-    x_job_token: str | None = Header(default=None),
+    _: str = Depends(require_job_token),
 ) -> dict:
     """Trigger pipeline pengumpulan harga BARU: 'pc' atau 'laptop' (blocking)."""
-    if settings.internal_job_token and x_job_token != settings.internal_job_token:
-        raise HTTPException(status_code=401, detail="Invalid job token")
     from .jobs import run_pipeline_laptop, run_pipeline_pc
 
     if name == "pc":
