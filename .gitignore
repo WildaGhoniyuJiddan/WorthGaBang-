@@ -55,8 +55,12 @@ test_worl_scraper.js
 worl-backend.py
 worl-scraper.js
 
-# Backend reverse-engineering & probe scripts
+# Backend scratch & probe debug scripts (keeps backend/tests/ pytest suite tracked)
 backend/scripts/
+backend/test_*.py
+backend/decode_token.py
+backend/get_project*.py
+backend/probe_*.py
 
 # Extension probes, test scripts & legacy code
 worl-extension/probe.js
@@ -135,9 +139,11 @@ node_modules/
 .yarn/build-state.yml
 .yarn/install-state.gz
 
-# Next.js & Frontend Builds
+# Next.js & Frontend / Vercel Builds
 .next/
 */.next/
+.vercel/
+*/.vercel/
 out/
 */out/
 .turbo/
@@ -240,3 +246,16 @@ $RECYCLE.BIN/
 .project
 .settings/
 .classpath
+
+# ==============================================================================
+# AI TOOLS, AGENTS & LOCAL SKILLS
+# ==============================================================================
+.agents/
+*/.agents/
+skills-lock.json
+*/skills-lock.json
+.gemini/
+*/.gemini/
+.claude/
+*/.claude/
+
