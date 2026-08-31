@@ -427,11 +427,12 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
         cpu_penalty = 0.0
         if want_cpu:
             got_tier = _cpu_tier(got_cpu) if got_cpu else None
+            want_tier = _cpu_tier(want_cpu)
             if got_cpu == want_cpu:
                 pass
-            elif got_tier == _cpu_tier(want_cpu):
+            elif got_tier is not None and got_tier == want_tier:
                 cpu_penalty = 0.15
-            elif got_tier and got_tier > _cpu_tier(want_cpu):
+            elif got_tier is not None and want_tier is not None and got_tier > want_tier:
                 cpu_penalty = 0.2
             elif got_cpu is None:
                 cpu_penalty = 0.25

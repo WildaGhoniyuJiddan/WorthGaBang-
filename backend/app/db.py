@@ -17,7 +17,11 @@ def _engine_kwargs(database_url: str) -> dict:
         # WAL biar reader gak diblokir writer.
         return {"connect_args": {"check_same_thread": False, "timeout": 30},
                 "pool_pre_ping": True}
-    return {"pool_pre_ping": True}
+    # Vercel serverless reuse koneksi antar-invocation; psycopg prepared
+    # statement gak ke-clear -> "DuplicatePreparedStatement". Disable
+    # server-side prepare (client-side parametrize tetap aman).
+    return {"pool_pre_ping": True,
+            "connect_args": {"prepare_threshold": None}}
 
 
 settings = get_settings()
