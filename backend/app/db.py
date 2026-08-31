@@ -22,6 +22,9 @@ def _engine_kwargs(database_url: str) -> dict:
 
 settings = get_settings()
 database_url = settings.database_url
+# Use psycopg3 (already a dependency) instead of the default psycopg2 driver.
+if database_url.startswith("postgresql://"):
+    database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
 if database_url.startswith("sqlite:///./"):
     database_path = Path(__file__).resolve().parents[1] / database_url.removeprefix("sqlite:///./")
     database_path.parent.mkdir(parents=True, exist_ok=True)
