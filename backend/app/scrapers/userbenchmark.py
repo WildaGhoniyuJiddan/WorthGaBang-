@@ -24,7 +24,7 @@ import httpx
 from .base import ListingRecord, Scraper, ScraperError
 
 JINA_BASE = "https://r.jina.ai/"
-_UA_NON_BROWSER = "HargaPasBot/1.0 (+benchmark-catalog)"
+_UA_NON_BROWSER = "WorthGaBangBot/1.0 (+benchmark-catalog)"
 
 # ponytail: cache ID statis hasil scrape manual; regenerate berkala via cron
 # kalau model baru dirasa perlu. Upgrade: parse halaman list per kategori.

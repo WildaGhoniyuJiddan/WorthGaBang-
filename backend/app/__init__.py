@@ -1,2 +1,2 @@
-"""HargaPas backend package."""
+"""WorthGaBang backend package."""
 

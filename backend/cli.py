@@ -4,7 +4,7 @@ from app.jobs import run_all_queries, run_cycle
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HargaPas background jobs")
+    parser = argparse.ArgumentParser(description="WorthGaBang background jobs")
     parser.add_argument("command", choices=("scrape", "scrape-all", "import-processed"))
     parser.add_argument("--query", default=None)
     parser.add_argument("--data-dir", default=None)

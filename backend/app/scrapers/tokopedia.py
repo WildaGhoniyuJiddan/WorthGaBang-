@@ -100,7 +100,7 @@ class TokopediaScraper(Scraper):
                 _last_jina_request[0] = time.monotonic()
             try:
                 # r.jina.ai menerima UA non-browser lebih konsisten daripada UA browser.
-                with self._client({"User-Agent": "HargaPasBot/1.0 (+scheduled-catalog)"}) as client:
+                with self._client({"User-Agent": "WorthGaBangBot/1.0 (+scheduled-catalog)"}) as client:
                     response = client.get(reader_url)
                     if response.status_code in (403, 429) and attempt == 0:
                         time.sleep(30)

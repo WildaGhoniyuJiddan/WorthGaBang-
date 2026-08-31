@@ -17,7 +17,7 @@ class FacebookMarketplaceScraper(Scraper):
         headers = {"Cookie": self.cookie} if self.cookie else {}
         # ponytail: UA bot eksplisit khusus FB — UA browser malah dapat HTTP 400
         # (tes 23 Aug 2026); bot-UA dapat halaman login-wall yang bisa dideteksi.
-        headers.setdefault("User-Agent", "HargaPasBot/1.0 (+scheduled-catalog)")
+        headers.setdefault("User-Agent", "WorthGaBangBot/1.0 (+scheduled-catalog)")
         headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         try:
             with self._client(headers) as client:

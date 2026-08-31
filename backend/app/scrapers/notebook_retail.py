@@ -48,7 +48,7 @@ class NotebookRetailScraper(Scraper):
             "Content-Type": "application/json",
             "Origin": f"https://{_WWW}",
             "Referer": f"https://{_WWW}/simulasi/",
-            "User-Agent": "HargaPasBot/1.0 (+scheduled-catalog)",
+            "User-Agent": "WorthGaBangBot/1.0 (+scheduled-catalog)",
         }) as client:
             response = client.post(
                 f"https://{_WWW}/jeanne/v2/simulation",

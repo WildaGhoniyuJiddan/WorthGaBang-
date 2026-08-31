@@ -10,7 +10,7 @@ DEFAULT_PROCESSED_HARDWARE_DIR = str(BACKEND_ROOT / "data" / "used_hardware")
 
 
 class Settings(BaseSettings):
-    app_name: str = "HargaPas API"
+    app_name: str = "WorthGaBang API"
     environment: str = "development"
     database_url: str = DEFAULT_DATABASE_URL
     processed_hardware_dir: str = DEFAULT_PROCESSED_HARDWARE_DIR

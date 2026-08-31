@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "HargaPas — Cek Harga PC & Laptop",
+  title: "WorthGaBang — Cek Harga PC & Laptop",
   description: "Validasi harga produk dari pembanding marketplace nyata.",
 };
 

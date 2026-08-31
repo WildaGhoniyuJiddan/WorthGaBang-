@@ -99,7 +99,7 @@ export default function HomePage() {
   return (
     <main className="page-shell">
       <section className="hero">
-        <div className="eyebrow">HargaPas / marketplace intelligence</div>
+        <div className="eyebrow">WorthGaBang / marketplace intelligence</div>
         <h1>Harga yang kamu temukan, <span>masuk akal nggak?</span></h1>
         <p>Bandingkan dengan data listing yang sudah dikumpulkan dari marketplace, tanpa menunggu scraping saat request.</p>
       </section>
@@ -246,7 +246,7 @@ export default function HomePage() {
             : <div className="empty-state"><span>✦</span><p>Hasil analisis akan muncul di sini.<br />Masukkan produk untuk mulai membandingkan.</p></div>}
       </section>
 
-      <footer><span>HargaPas</span><span>Data pembanding diperbarui terjadwal · v1 MVP</span></footer>
+      <footer><span>WorthGaBang</span><span>Data pembanding diperbarui terjadwal · v1 MVP</span></footer>
     </main>
   );
 }
