@@ -1,12 +1,14 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AnalyzeRequest(BaseModel):
     mode: Literal["pc", "laptop"]
-    query: str = Field(min_length=2, max_length=255)
+    # PC: query wajib (model komponen). Laptop: boleh pakai cpu/gpu/ram_gb/
+    # storage_gb tanpa query (frontend isi field terpisah).
+    query: str = Field(default="", min_length=0, max_length=255)
     price: int = Field(gt=0)
     component_type: Optional[str] = Field(default=None, max_length=32)
     brand: Optional[str] = Field(default=None, max_length=64)
@@ -17,6 +19,16 @@ class AnalyzeRequest(BaseModel):
     storage_gb: Optional[int] = Field(default=None, gt=0, le=32768)
     screen_size: Optional[float] = Field(default=None, gt=0, le=100)
     condition: Optional[str] = Field(default="any", max_length=32)
+
+    @model_validator(mode="after")
+    def _require_input(self) -> "AnalyzeRequest":
+        if self.mode == "pc" and len((self.query or "").strip()) < 2:
+            raise ValueError("Query komponen wajib diisi untuk mode PC.")
+        if self.mode == "laptop" and not (self.query or "").strip() and not (
+            self.cpu or self.gpu or self.ram_gb or self.storage_gb
+        ):
+            raise ValueError("Isi minimal satu spesifikasi laptop (CPU, GPU, RAM, atau storage).")
+        return self
 
 
 class BundleItem(BaseModel):
