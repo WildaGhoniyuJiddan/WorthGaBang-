@@ -363,24 +363,62 @@ function LoadingCard({ mode }: { mode: Mode }) {
 function BundleResultCard({ result }: { result: BundleResult }) {
   const verdictClass = result.verdict.replace(/ /g, "-");
   const hemat = result.savings_percent >= 0;
+  const selisihRupiah = Math.abs(result.reference_total - result.bundle_price);
+
   return (
     <section className="result-card">
       <div className="result-topline">
         <div className="section-kicker">HASIL CEK BUNDLE</div>
-        <span className={`verdict ${verdictClass}`}>{result.verdict}</span>
+        <span className={`verdict ${verdictClass}`}>
+          {result.verdict === "kemahalan" && "⚠️ "}
+          {result.verdict === "worth it" && "🔥 "}
+          {result.verdict === "wajar" && "⚖️ "}
+          {result.verdict}
+        </span>
       </div>
+
+      {/* HERO VERDICT BANNER - SANGAT MENONJOL & JELAS */}
+      <div className={`hero-verdict-banner banner-${verdictClass}`}>
+        <div className="banner-icon-col">
+          {result.verdict === "kemahalan" ? "🚨" : result.verdict === "worth it" ? "🔥" : "⚖️"}
+        </div>
+        <div className="banner-text-col">
+          <div className="banner-heading">
+            {result.verdict === "kemahalan" && "KEMAHALAN — TIDAK DISARANKAN"}
+            {result.verdict === "worth it" && "WORTH IT BANGET — SANGAT MENGUNTUNGKAN"}
+            {result.verdict === "wajar" && "HARGA WAJAR — SESUAI PASAR"}
+            {result.verdict === "ada opsi lebih baik" && "ADA OPSI LEBIH BAIK"}
+            {result.verdict === "data terbatas" && "DATA PASAR TERBATAS"}
+          </div>
+          <div className="banner-explanation">
+            {hemat ? (
+              <>
+                Paket ini <strong>lebih hemat {formatRupiah(selisihRupiah)} ({result.savings_percent}%)</strong> dibanding membeli komponen satuan di pasar!
+              </>
+            ) : (
+              <>
+                Paket ini <strong>lebih mahal {formatRupiah(selisihRupiah)} ({Math.abs(result.savings_percent)}%)</strong> dibanding membeli komponen satuan di pasar normal!
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="score-row">
         <div>
-          <div className="score-number">{Math.round(result.score)}<small>/100</small></div>
-          <div className="score-caption">Skor worth-it paket bundling</div>
+          <div className={`score-number score-${verdictClass}`}>
+            {Math.round(result.score)}
+            <small>/100</small>
+          </div>
+          <div className="score-caption">Skor kelayakan paket bundling</div>
         </div>
         <div className="price-summary">
-          <span>Harga bundle</span>
+          <span>Harga paket bundle</span>
           <strong>{formatRupiah(result.bundle_price)}</strong>
           <small>
             Total normal {formatRupiah(result.reference_total)} ·{" "}
             <strong className={hemat ? "savings-pos" : "savings-neg"}>
-              {hemat ? "hemat" : "lebih mahal"} {Math.abs(result.savings_percent)}%
+              {hemat ? `hemat ${result.savings_percent}%` : `lebih mahal ${Math.abs(result.savings_percent)}%`}
             </strong>
           </small>
         </div>
@@ -413,13 +451,34 @@ function BundleResultCard({ result }: { result: BundleResult }) {
         </div>
       )}
 
-      <p className="recommendation">{result.recommendation}</p>
+      {/* KESIMPULAN AKHIR & SARAN PEMBELIAN */}
+      <div className={`bundle-conclusion-box conclusion-${verdictClass}`}>
+        <div className="bundle-conclusion-title">
+          <span>{result.verdict === "kemahalan" ? "⚠️" : result.verdict === "worth it" ? "💡" : "📌"}</span>
+          <span>Kesimpulan Akhir &amp; Saran Pembelian</span>
+        </div>
+        <p className="bundle-conclusion-desc">
+          {result.verdict === "kemahalan" ? (
+            <>
+              Hindari membeli paket ini di harga <strong>{formatRupiah(result.bundle_price)}</strong> karena Anda membayar sekitar <strong>{formatRupiah(selisihRupiah)} lebih mahal</strong> dari harga pasaran. Disarankan untuk menawar harga paket ini menjadi sekitar <strong>{formatRupiah(result.reference_total)}</strong> atau lebih baik membeli komponen lepasan secara mandiri.
+            </>
+          ) : result.verdict === "worth it" ? (
+            <>
+              Paket ini merupakan <strong>penawaran yang sangat menguntungkan</strong>. Anda menghemat <strong>{formatRupiah(selisihRupiah)} ({result.savings_percent}%)</strong> dibanding membeli dan merakit sendiri dari harga normal pasar.
+            </>
+          ) : (
+            <>
+              Harga paket ini relatif wajar dan seimbang dengan harga pasaran normal ({formatRupiah(result.reference_total)}). Anda bisa mencoba menawar sedikit untuk mendapatkan nilai lebih menguntungkan.
+            </>
+          )}
+        </p>
+      </div>
 
       {result.cross_market_advice && (
         <div className="cross-market-box">
           <div className="cross-market-header">
             <span className="cross-market-icon">💡</span>
-            <strong>Analisis Lintas Pasar (Baru vs Bekas)</strong>
+            <strong>Analisis Nilai Paket Bundle</strong>
           </div>
           <p className="cross-market-text">{result.cross_market_advice}</p>
         </div>
@@ -497,12 +556,43 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
           <div className="section-kicker">HASIL ANALISIS</div>
           {result.tier_label && <span className="tier-badge">⚡ {result.tier_label}</span>}
         </div>
-        <span className={`verdict ${verdictClass}`}>{result.verdict}</span>
+        <span className={`verdict ${verdictClass}`}>
+          {result.verdict === "kemahalan" && "⚠️ "}
+          {result.verdict === "worth it" && "🔥 "}
+          {result.verdict === "wajar" && "⚖️ "}
+          {result.verdict}
+        </span>
+      </div>
+
+      {/* HERO VERDICT BANNER */}
+      <div className={`hero-verdict-banner banner-${verdictClass}`}>
+        <div className="banner-icon-col">
+          {result.verdict === "kemahalan" ? "🚨" : result.verdict === "worth it" ? "🔥" : result.verdict === "ada opsi lebih baik" ? "💡" : "⚖️"}
+        </div>
+        <div className="banner-text-col">
+          <div className="banner-heading">
+            {result.verdict === "kemahalan" && "KEMAHALAN — DI ATAS HARGA WAJAR"}
+            {result.verdict === "worth it" && "WORTH IT — HARGA SANGAT BAGUS"}
+            {result.verdict === "wajar" && "HARGA WAJAR — SESUAI PASAR"}
+            {result.verdict === "ada opsi lebih baik" && "ADA OPSI LEBIH BAIK"}
+            {result.verdict === "data terbatas" && "DATA PASAR TERBATAS"}
+          </div>
+          <div className="banner-explanation">
+            {result.verdict === "kemahalan" && "Harga yang Anda temukan lebih tinggi dari median pasaran normal. Disarankan untuk menawar atau mencari penjual lain."}
+            {result.verdict === "worth it" && "Harga ini di bawah rata-rata pasar saat ini. Sangat direkomendasikan untuk segera diamankan jika kondisi unit normal!"}
+            {result.verdict === "wajar" && "Harga ini berada dalam rentang wajar dan masuk akal untuk pasaran saat ini."}
+            {result.verdict === "ada opsi lebih baik" && "Di rentang harga ini, tersedia opsi alternatif dengan performa atau spesifikasi yang lebih tinggi."}
+            {result.verdict === "data terbatas" && "Jumlah pembanding di database masih terbatas untuk produk ini."}
+          </div>
+        </div>
       </div>
 
       <div className="score-row">
         <div>
-          <div className="score-number">{Math.round(result.score)}<small>/100</small></div>
+          <div className={`score-number score-${verdictClass}`}>
+            {Math.round(result.score)}
+            <small>/100</small>
+          </div>
           <div className="score-caption">Skor worth-it untuk <strong>{result.query}</strong></div>
         </div>
         <div className="price-summary">
