@@ -170,9 +170,11 @@ coverage/
 *.bak
 
 # Data and Storage folders
-data/
+/data/
 backend/data/
-backend/app/data/
+worl-tools/data/
+!backend/app/data/
+!backend/app/data/*.json
 local_data/
 storage/
 
