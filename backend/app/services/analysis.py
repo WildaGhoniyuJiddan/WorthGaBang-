@@ -421,7 +421,7 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
             LaptopUnit.price >= 500_000,
             LaptopUnit.price <= 150_000_000,
             (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
-        ).order_by(desc(LaptopUnit.scraped_at)).limit(5000)
+        ).order_by(desc(LaptopUnit.scraped_at)).limit(1000)
     ).all()
     # Spek yang diisi user jadi HARD-GATE (ala komponen PC):
     #   - GPU & CPU: token model PERSIS — "RTX 4060" gak boleh kena "RTX 4050".
