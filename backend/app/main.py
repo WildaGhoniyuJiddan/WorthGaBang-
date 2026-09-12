@@ -288,3 +288,8 @@ def debug_env():
     # Also check if DATABASE_URL is set (but don't show the value)
     result['DATABASE_URL_SET'] = 'set' if os.getenv('DATABASE_URL') else 'not set'
     return result
+
+@app.get("/test")
+def test():
+    return {"message": "hello"}
+
