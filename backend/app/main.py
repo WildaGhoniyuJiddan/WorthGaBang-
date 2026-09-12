@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 import logging
 import traceback
@@ -292,4 +293,14 @@ def debug_env():
 @app.get("/test")
 def test():
     return {"message": "hello"}
+
+
+
+@app.get("/api/v1/test-db")
+def test_db(db: Session = Depends(get_db)):
+    try:
+        result = db.execute(text("SELECT version()")).fetchone()
+        return {"version": result[0] if result else None}
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
 
