@@ -277,3 +277,14 @@ def debug_db(db: Session = Depends(get_db)) -> dict:
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/v1/debug/env")
+def debug_env():
+    # Return non-sensitive environment variables for debugging
+    safe_vars = ['ENVIRONMENT', 'CORS_ORIGINS', 'NEXT_PUBLIC_API_BASE_URL']
+    result = {}
+    for var in safe_vars:
+        result[var] = os.getenv(var, 'not set')
+    # Also check if DATABASE_URL is set (but don't show the value)
+    result['DATABASE_URL_SET'] = 'set' if os.getenv('DATABASE_URL') else 'not set'
+    return result
