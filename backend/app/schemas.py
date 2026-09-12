@@ -84,6 +84,8 @@ class Alternative(BaseModel):
     score: int
     est_price_idr: int
     gain_percent: int
+    vram_gb: Optional[int] = None
+    tier_label: Optional[str] = None
 
 
 class Freshness(BaseModel):
@@ -103,6 +105,9 @@ class AnalyzeResponse(BaseModel):
     recommendation: str
     reference_price: int
     price_delta_percent: float
+    fair_price_low: int = 0
+    fair_price_high: int = 0
+    tier_label: Optional[str] = None
     comparisons: list[Comparison]
     alternatives: list[Alternative] = []
     freshness: Freshness

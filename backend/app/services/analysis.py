@@ -11,8 +11,22 @@ from ..config import get_settings
 from ..models import LaptopUnit, RawListing, ScrapeRun
 from ..schemas import AnalyzeRequest, Comparison, Freshness
 from .relevance import component_type_from_query, is_relevant_pc_listing
-from .benchmark import better_alternatives, laptop_combo_score, passmark_score
+from .benchmark import better_alternatives, get_tier_label, laptop_combo_score, passmark_score
 from .scoring import ScoreResult, score_price
+
+
+def _age_penalty(scraped_at: datetime | None, now: datetime) -> float:
+    if not scraped_at:
+        return 0.0
+    if scraped_at.tzinfo is None:
+        scraped_at = scraped_at.replace(tzinfo=timezone.utc)
+    days = max(0.0, (now - scraped_at).total_seconds() / 86400.0)
+    if days <= 30:
+        return 0.0
+    elif days <= 60:
+        return 0.04
+    else:
+        return min(0.12, 0.04 + 0.04 * ((days - 60) / 30))
 
 
 def _tokens(value: str) -> set[str]:
@@ -225,12 +239,13 @@ def _age_label(seconds: int | None) -> str:
 
 
 def _freshness_for_source(session: Session, source: str) -> Freshness:
+    sources = ("facebook_marketplace", "facebook") if source in ("facebook_marketplace", "facebook") else (source,)
     run = session.scalar(
-        select(ScrapeRun).where(ScrapeRun.source == source).order_by(desc(ScrapeRun.started_at)).limit(1)
+        select(ScrapeRun).where(ScrapeRun.source.in_(sources)).order_by(desc(ScrapeRun.started_at)).limit(1)
     )
     timestamp = run.finished_at if run and run.status == "success" else None
     if timestamp is None:
-        timestamp = session.scalar(select(RawListing.scraped_at).where(RawListing.source == source).order_by(desc(RawListing.scraped_at)).limit(1))
+        timestamp = session.scalar(select(RawListing.scraped_at).where(RawListing.source.in_(sources)).order_by(desc(RawListing.scraped_at)).limit(1))
     now = datetime.now(timezone.utc)
     if timestamp is None:
         age = None
@@ -302,20 +317,23 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
     # Katalog retail EK pakai category = jenis komponen (vga/processor/...),
     # marketplace pakai "pc". Kalau katalog >20k listing, pindahkan filter ke SQL.
     rows = []
-    for source, cats in (
-        ("komponen_retail", ("vga", "processor", "motherboard", "ram", "ssd", "harddisk")),
-        ("tokopedia", ("pc",)),
-        ("facebook", ("pc",)),
+    for sources, cats in (
+        (("komponen_retail",), ("vga", "processor", "motherboard", "ram", "ssd", "harddisk")),
+        (("tokopedia",), ("pc",)),
+        (("facebook", "facebook_marketplace"), ("pc",)),
     ):
         rows += session.scalars(
             select(RawListing).where(
                 RawListing.category.in_(cats),
-                RawListing.raw_price.is_not(None),
-                RawListing.source == source,
+                RawListing.raw_price >= 50_000,
+                RawListing.raw_price <= 150_000_000,
+                (RawListing.condition != "issue") | (RawListing.condition.is_(None)),
+                RawListing.source.in_(sources),
             ).order_by(desc(RawListing.scraped_at)).limit(6000)
         ).all()
+    now = datetime.now(timezone.utc)
     scored = [
-        (_similarity(request.query, row.raw_title), row)
+        (max(0.05, _similarity(request.query, row.raw_title) - _age_penalty(row.scraped_at, now)), row)
         for row in rows
         if _is_relevant_pc_listing(request.query, row.raw_title, request.component_type)
     ]
@@ -399,7 +417,11 @@ def _clean_title(text: str | None) -> str:
 
 def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
     rows = session.scalars(
-        select(LaptopUnit).where(LaptopUnit.price > 0).order_by(desc(LaptopUnit.scraped_at)).limit(5000)
+        select(LaptopUnit).where(
+            LaptopUnit.price >= 500_000,
+            LaptopUnit.price <= 150_000_000,
+            (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
+        ).order_by(desc(LaptopUnit.scraped_at)).limit(5000)
     ).all()
     # Spek yang diisi user jadi HARD-GATE (ala komponen PC):
     #   - GPU & CPU: token model PERSIS — "RTX 4060" gak boleh kena "RTX 4050".
@@ -442,10 +464,11 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
             continue
         if min_storage and (row.storage_gb or 0) < min_storage:
             continue
+        now = datetime.now(timezone.utc)
         wanted = _tokens(" ".join(filter(None, [request.brand or "", request.query])))
         actual = _tokens(f"{row.brand or ''} {row.model or ''}")
         similarity = round(len(wanted & actual) / len(wanted), 3) if wanted else 0.3
-        similarity = max(0.05, similarity - cpu_penalty)
+        similarity = max(0.05, similarity - cpu_penalty - _age_penalty(row.scraped_at, now))
         scored.append((similarity, row))
     pool = sorted(scored, key=lambda item: (item[0], item[1].scraped_at), reverse=True)
     if not pool:
@@ -565,11 +588,22 @@ def _benchmark_advice(request: AnalyzeRequest, result) -> tuple[str, list[dict]]
 
 
 def analyze(session: Session, request: AnalyzeRequest):
+    tier_label = None
     if request.mode == "pc":
         comparisons = _pc_comparisons(session, request)
         spec_map = {}
+        ctype = request.component_type or component_type_from_query(request.query)
+        base = passmark_score(request.query, ctype)
+        if base and base.get("score"):
+            tier_label = get_tier_label(base["score"], ctype)
     else:
         comparisons, spec_map = _laptop_comparisons(session, request)
+        user_combo = laptop_combo_score(
+            request.cpu or request.query,
+            request.gpu or request.query,
+        )
+        if user_combo:
+            tier_label = user_combo.get("tier_label")
     result = score_price(request.price, [comparison.price for comparison in comparisons])
     # fallback anchor harga BARU dari katalog referensi (buildcores+PCPartPicker)
     # kalau listing second yang relevan gak cukup untuk kasih verdict.
@@ -608,5 +642,19 @@ def analyze(session: Session, request: AnalyzeRequest):
             recommendation=f"{result.recommendation} {advice}",
             reference_price=result.reference_price,
             delta_percent=result.delta_percent,
+            fair_price_low=result.fair_price_low,
+            fair_price_high=result.fair_price_high,
+            tier_label=tier_label,
+        )
+    elif tier_label:
+        result = ScoreResult(
+            score=result.score,
+            verdict=result.verdict,
+            recommendation=result.recommendation,
+            reference_price=result.reference_price,
+            delta_percent=result.delta_percent,
+            fair_price_low=result.fair_price_low,
+            fair_price_high=result.fair_price_high,
+            tier_label=tier_label,
         )
     return result, comparisons, freshness(session, selected_source), alternatives

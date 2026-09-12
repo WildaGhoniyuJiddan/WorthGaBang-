@@ -24,6 +24,15 @@ export type Comparison = {
   condition?: string | null;
 };
 
+export type Alternative = {
+  name: string;
+  score: number;
+  est_price_idr: number;
+  gain_percent: number;
+  vram_gb?: number | null;
+  tier_label?: string | null;
+};
+
 export type AnalyzeResult = {
   mode: Mode;
   query: string;
@@ -33,7 +42,11 @@ export type AnalyzeResult = {
   recommendation: string;
   reference_price: number;
   price_delta_percent: number;
+  fair_price_low?: number;
+  fair_price_high?: number;
+  tier_label?: string | null;
   comparisons: Comparison[];
+  alternatives?: Alternative[];
   freshness: {
     last_updated_at?: string | null;
     age_seconds?: number | null;

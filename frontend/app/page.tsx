@@ -267,22 +267,126 @@ function BundleResultCard({ result }: { result: BundleResult }) {
   );
 }
 
+function getPinPercent(price: number, minVal: number, maxVal: number): number {
+  if (!minVal || !maxVal || minVal >= maxVal) return 50;
+  const pct = ((price - minVal) / (maxVal - minVal)) * 100;
+  return Math.max(4, Math.min(96, Math.round(pct)));
+}
+
+function formatSource(source: string): { label: string; className: string } {
+  if (source === "tokopedia") return { label: "Tokopedia", className: "source-tokopedia" };
+  if (source === "facebook" || source === "facebook_marketplace") return { label: "FB Market", className: "source-facebook" };
+  if (source === "komponen_retail" || source === "notebook_retail") return { label: "Retail EK", className: "source-retail" };
+  return { label: "Katalog", className: "source-retail" };
+}
+
 function ResultCard({ result }: { result: AnalyzeResult }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? result.comparisons : result.comparisons.slice(0, 5);
   const hiddenCount = result.comparisons.length - 5;
   const verdictClass = result.verdict.replace(/ /g, "-");
+
+  const lowBound = Math.min(result.input_price, result.fair_price_low || result.reference_price * 0.8) * 0.9;
+  const highBound = Math.max(result.input_price, result.fair_price_high || result.reference_price * 1.2) * 1.1;
+  const pinPos = getPinPercent(result.input_price, lowBound, highBound);
+
   return (
     <section className="result-card">
-      <div className="result-topline"><div className="section-kicker">HASIL ANALISIS</div><span className={`verdict ${verdictClass}`}>{result.verdict}</span></div>
-      <div className="score-row">
-        <div><div className="score-number">{Math.round(result.score)}<small>/100</small></div><div className="score-caption">Skor worth-it untuk <strong>{result.query}</strong></div></div>
-        <div className="price-summary"><span>Harga kamu</span><strong>{formatRupiah(result.input_price)}</strong><small>Median pembanding {formatRupiah(result.reference_price)}</small></div>
+      <div className="result-topline">
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="section-kicker">HASIL ANALISIS</div>
+          {result.tier_label && <span className="tier-badge">⚡ {result.tier_label}</span>}
+        </div>
+        <span className={`verdict ${verdictClass}`}>{result.verdict}</span>
       </div>
+
+      <div className="score-row">
+        <div>
+          <div className="score-number">{Math.round(result.score)}<small>/100</small></div>
+          <div className="score-caption">Skor worth-it untuk <strong>{result.query}</strong></div>
+        </div>
+        <div className="price-summary">
+          <span>Harga kamu</span>
+          <strong>{formatRupiah(result.input_price)}</strong>
+          <small>Median pasar {formatRupiah(result.reference_price)}</small>
+        </div>
+      </div>
+
+      <div className="spectrum-box">
+        <div className="spectrum-title">
+          <span>Spektrum Rentang Harga Pasar</span>
+          <span>{result.price_delta_percent > 0 ? `+${result.price_delta_percent}% vs median` : `${result.price_delta_percent}% vs median`}</span>
+        </div>
+        <div className="spectrum-bar-wrap">
+          <div className="spectrum-pin" style={{ left: `${pinPos}%` }}>
+            <span className="spectrum-pin-tag">Harga Kamu</span>
+            <div className="spectrum-pin-needle" />
+          </div>
+        </div>
+        <div className="spectrum-labels">
+          <div><span>Murah / Worth It</span><strong>{formatRupiah(result.fair_price_low || Math.round(result.reference_price * 0.85))}</strong></div>
+          <div style={{ textAlign: "center" }}><span>Median Pasar</span><strong>{formatRupiah(result.reference_price)}</strong></div>
+          <div style={{ textAlign: "right" }}><span>Mulai Kemahalan</span><strong>{formatRupiah(result.fair_price_high || Math.round(result.reference_price * 1.15))}</strong></div>
+        </div>
+      </div>
+
       <p className="recommendation">{result.recommendation}</p>
-      <div className="result-meta"><span>Data {result.freshness.label}</span><span>Sumber utama: {result.freshness.primary_source}</span>{result.freshness.is_stale && <span className="stale">Perlu refresh</span>}</div>
-      <div className="comparisons"><div className="comparison-heading"><h3>Pembanding yang dipakai</h3><span>{result.comparisons.length} referensi · {new Set(result.comparisons.map((c) => c.source)).size} sumber</span></div>
-        {visible.map((comparison, index) => <a className="comparison-row" href={comparison.listing_url || undefined} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer"><span className="rank">0{index + 1}</span><span className="comparison-title">{comparison.title}<small>{comparison.source === "price_reference" ? "referensi katalog, bukan listing marketplace" : comparison.source} · match {Math.round(comparison.similarity * 100)}%</small></span><strong>{formatRupiah(comparison.price)}</strong><span className="arrow">{comparison.listing_url ? "↗" : "—"}</span></a>)}
+
+      {result.alternatives && result.alternatives.length > 0 && (
+        <div className="alternatives-section">
+          <div className="comparison-heading">
+            <h3>Alternatif Performa Lebih Tinggi</h3>
+            <span>Rekomendasi di kisaran harga serupa</span>
+          </div>
+          <div className="alternatives-grid">
+            {result.alternatives.map((alt, idx) => (
+              <div className="alt-card" key={`alt-${idx}`}>
+                <div className="alt-info">
+                  <div className="alt-title">{alt.name}</div>
+                  <div className="alt-badges">
+                    <span className="gain-badge">+{alt.gain_percent}% Lebih Kencang</span>
+                    {alt.vram_gb && <span className="vram-tag">{alt.vram_gb} GB VRAM</span>}
+                    {alt.tier_label && <span style={{ fontSize: "9px", color: "var(--muted)" }}>{alt.tier_label}</span>}
+                  </div>
+                </div>
+                <div className="alt-price">
+                  {formatRupiah(alt.est_price_idr)}
+                  <small>Estimasi pasar</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="result-meta" style={{ marginTop: "16px" }}>
+        <span>Data {result.freshness.label}</span>
+        <span>Sumber: {result.freshness.primary_source.replace("_", " ")}</span>
+        {result.freshness.is_stale && <span className="stale">Perlu refresh</span>}
+      </div>
+
+      <div className="comparisons">
+        <div className="comparison-heading">
+          <h3>Pembanding yang dipakai</h3>
+          <span>{result.comparisons.length} referensi · {new Set(result.comparisons.map((c) => c.source)).size} sumber pasar</span>
+        </div>
+        {visible.map((comparison, index) => {
+          const src = formatSource(comparison.source);
+          return (
+            <a className="comparison-row" href={comparison.listing_url || undefined} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer">
+              <span className="rank">0{index + 1}</span>
+              <span className="comparison-title">
+                {comparison.title}
+                <small>
+                  <span className={`source-tag ${src.className}`}>{src.label}</span>
+                  {comparison.condition ? ` · ${comparison.condition}` : ""} · match {Math.round(comparison.similarity * 100)}%
+                </small>
+              </span>
+              <strong>{formatRupiah(comparison.price)}</strong>
+              <span className="arrow">{comparison.listing_url ? "↗" : "—"}</span>
+            </a>
+          );
+        })}
         {hiddenCount > 0 && !showAll && (
           <button className="show-all-button" type="button" onClick={() => setShowAll(true)}>
             Lihat semua pembanding ({hiddenCount} lainnya)
