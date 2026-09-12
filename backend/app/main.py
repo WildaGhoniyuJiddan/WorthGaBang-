@@ -267,3 +267,13 @@ def trigger_pipeline(
     if name == "laptop":
         return run_pipeline_laptop(progress=lambda m: None)
     raise HTTPException(status_code=404, detail=f"Pipeline tidak dikenal: {name}")
+
+
+# Debug endpoint for database connection
+@app.get("/api/v1/debug/db")
+def debug_db(db: Session = Depends(get_db)) -> dict:
+    try:
+        db.execute(select(1))
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
