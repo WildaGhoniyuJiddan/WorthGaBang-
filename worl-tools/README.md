@@ -1,6 +1,6 @@
-# HargaPas
+# WorthGaBang?
 
-HargaPas membantu pengguna menilai kewajaran harga PC component atau laptop berdasarkan katalog listing marketplace yang sudah dinormalisasi.
+WorthGaBang? membantu pengguna menilai kewajaran harga PC component atau laptop berdasarkan katalog listing marketplace yang sudah dinormalisasi.
 
 ## Struktur
 

@@ -48,21 +48,27 @@ class BundleRequest(BaseModel):
 
 
 class BundleItemBreakdown(BaseModel):
-    """Rincian 1 komponen dalam bundle: harga input vs referensi retail."""
+    """Rincian 1 komponen dalam bundle: harga input vs referensi baru & bekas."""
 
     query: str
     component_type: str
     price_input: Optional[int] = None
     reference_price: int
+    new_reference_price: Optional[int] = None
+    used_reference_price: Optional[int] = None
 
 
 class BundleResponse(BaseModel):
     bundle_price: int
     reference_total: int
+    new_reference_total: Optional[int] = None
+    used_reference_total: Optional[int] = None
     score: float
     verdict: str
     recommendation: str
     savings_percent: float
+    savings_used_percent: Optional[float] = None
+    cross_market_advice: Optional[str] = None
     items: list[BundleItemBreakdown]
 
 

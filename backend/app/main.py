@@ -20,6 +20,7 @@ from .schemas import (
     Alternative,
     AnalyzeRequest,
     AnalyzeResponse,
+    BundleItemBreakdown,
     BundleRequest,
     BundleResponse,
     FreshnessResponse,
@@ -28,7 +29,7 @@ from .schemas import (
     PCComponentResponse,
 )
 from .services.ingestion import ListingInput, ingest_listings
-from .services.analysis import all_freshness, analyze, new_price_anchor
+from .services.analysis import all_freshness, analyze, new_price_anchor, resolve_bundle_item_prices
 from .services.scoring import score_price
 from .services.coverage import report_pc_coverage
 from .services.suggest import suggest_components
@@ -92,57 +93,82 @@ def analyze_price(payload: AnalyzeRequest, db: Session = Depends(get_db)) -> Ana
 
 
 @app.post("/api/v1/analyze-bundle", response_model=BundleResponse)
-def analyze_bundle(payload: BundleRequest) -> BundleResponse:
-    """Worth-it cek paket bundling (mis. Mobo + CPU).
+def analyze_bundle(payload: BundleRequest, db: Session = Depends(get_db)) -> BundleResponse:
+    """Worth-it cek paket bundling (mis. Mobo + CPU / CPU + GPU).
 
-    Referensi = jumlah harga retail BARU per komponen (katalog EK / konversi
-    USD street). Harga per item opsional: kalau diisi dipakai sebagai pembanding
-    transparan di breakdown, referensi tetap dari katalog.
+    Referensi dihitung per item untuk harga BARU dan BEKAS dari dataset database & retail.
+    Total bundle dibandingkan terhadap penjumlahan harga pasar baru dan bekas.
     """
-    breakdown = []
-    reference_total = 0
+    breakdown: list[BundleItemBreakdown] = []
+    new_total = 0
+    used_total = 0
     missing: list[str] = []
+
     for item in payload.items:
         ctype = item.component_type or "cpu"
-        anchor = new_price_anchor(item.query, ctype)
-        if not anchor:
+        ref_primary, new_ref, used_ref = resolve_bundle_item_prices(db, item.query, ctype)
+
+        if ref_primary <= 0:
             missing.append(item.query)
-            continue
-        reference_total += anchor
+
+        new_total += (new_ref or ref_primary or 0)
+        used_total += (used_ref or (int(ref_primary * 0.70) if ref_primary else 0))
+
         breakdown.append(
-            {
-                "query": item.query,
-                "component_type": ctype,
-                "price_input": item.price,
-                "reference_price": anchor,
-            }
+            BundleItemBreakdown(
+                query=item.query,
+                component_type=ctype,
+                price_input=item.price,
+                reference_price=ref_primary,
+                new_reference_price=new_ref,
+                used_reference_price=used_ref,
+            )
         )
-    if not reference_total:
+
+    if new_total <= 0 and used_total <= 0:
         detail = f"Harga referensi tidak ditemukan untuk: {', '.join(missing)}" if missing else "Referensi tidak tersedia."
         raise HTTPException(status_code=422, detail=detail)
 
-    ratio = payload.bundle_price / reference_total
-    savings_percent = round((1 - ratio) * 100, 1)
+    reference_total = new_total if new_total > 0 else used_total
+
+    # Hitung rasio penghematan terhadap harga BARU dan BEKAS
+    savings_percent = round((1 - payload.bundle_price / reference_total) * 100, 1) if reference_total > 0 else 0.0
+    savings_used_percent = round((1 - payload.bundle_price / used_total) * 100, 1) if used_total > 0 else None
+
+    # Tentukan skor dan verdict
     result = score_price(payload.bundle_price, [reference_total])
+
+    new_total_str = f"Rp{new_total:,}".replace(",", ".")
+    used_total_str = f"Rp{used_total:,}".replace(",", ".")
+    bundle_str = f"Rp{payload.bundle_price:,}".replace(",", ".")
+
+    # Buat saran lintas pasar (cross-market advice)
     if savings_percent >= 10:
-        rec = (
-            f"Paket ini hemat {savings_percent}% dibeli bundling "
-            f"(total normal Rp{reference_total:,}). Worth it."
-        )
+        rec = f"Paket ini hemat {savings_percent}% dibeli bundling dibanding beli baru terpisah (total normal {new_total_str}). Worth it."
     elif savings_percent >= 0:
-        rec = f"Bundling cuma hemat {savings_percent}% — masuk akal kalau memang butuh keduanya."
+        rec = f"Bundling ini hemat {savings_percent}% dibanding beli baru terpisah (total normal {new_total_str}). Masuk akal jika butuh semua komponennya."
     else:
-        rec = (
-            f"Paket lebih mahal {abs(savings_percent)}% daripada beli terpisah "
-            f"(total normal Rp{reference_total:,}). Pertimbangkan beli satuan."
-        )
+        rec = f"Paket lebih mahal {abs(savings_percent)}% dibanding beli baru terpisah (total normal {new_total_str}). Pertimbangkan beli satuan."
+
+    cross_market_advice = (
+        f"🏷️ Total Baru Retail: {new_total_str} (hemat {savings_percent}%) | "
+        f"📦 Total Estimasi Bekas: {used_total_str}"
+        + (f" (hemat {savings_used_percent}%)" if savings_used_percent is not None else "")
+        + f". Tawaran paket seharga {bundle_str} "
+        + ("sangat menarik karena di bawah harga total part bekas eceran!" if savings_used_percent and savings_used_percent > 0 else "sesuai rentang pasar.")
+    )
+
     return BundleResponse(
         bundle_price=payload.bundle_price,
         reference_total=reference_total,
+        new_reference_total=new_total,
+        used_reference_total=used_total,
         score=result.score,
         verdict=result.verdict,
         recommendation=rec,
         savings_percent=savings_percent,
+        savings_used_percent=savings_used_percent,
+        cross_market_advice=cross_market_advice,
         items=breakdown,
     )
 

@@ -6,15 +6,17 @@ import { fetchSuggestions, Suggestion } from "../lib/api";
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  onSelectPrice?: (price: number) => void;
   section: string; // gpu | cpu | ram | storage | motherboard | laptop | ""
   condition?: string; // UI: new | second | any -> dipetakan ke API: baru | bekas | any
   placeholder?: string;
+  required?: boolean;
 };
 
 const formatRupiah = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
 
-export default function SuggestInput({ value, onChange, section, condition, placeholder }: Props) {
+export default function SuggestInput({ value, onChange, onSelectPrice, section, condition, placeholder, required = true }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
@@ -49,6 +51,9 @@ export default function SuggestInput({ value, onChange, section, condition, plac
 
   function pick(suggestion: Suggestion) {
     onChange(suggestion.label);
+    if (suggestion.price && onSelectPrice) {
+      onSelectPrice(suggestion.price);
+    }
     setOpen(false);
     setSuggestions([]);
   }
@@ -78,7 +83,7 @@ export default function SuggestInput({ value, onChange, section, condition, plac
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete="off"
-        required
+        required={required}
       />
       {open && suggestions.length > 0 && (
         <ul className="suggest-list" role="listbox">

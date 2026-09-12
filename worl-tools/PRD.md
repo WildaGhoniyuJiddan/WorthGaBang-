@@ -1,7 +1,7 @@
-# PRD - HargaPas
+# PRD - WorthGaBang?
 
 ## 1. Overview
-HargaPas adalah aplikasi web yang membantu calon pembeli menilai apakah harga PC rakitan atau laptop yang mereka temukan di marketplace itu wajar. Masalah yang coba diselesaikan adalah minimnya validasi harga yang cepat dan berbasis data pasar nyata. Saat ini calon pembeli biasanya bertanya di grup jual beli Facebook dan sering tidak mendapat balasan, atau bertanya ke chatbot AI yang datanya tidak selalu mengikuti kondisi pasar terkini dan tidak mencocokkan produk dengan pembanding nyata.
+WorthGaBang? adalah aplikasi web yang membantu calon pembeli menilai apakah harga PC rakitan atau laptop yang mereka temukan di marketplace itu wajar. Masalah yang coba diselesaikan adalah minimnya validasi harga yang cepat dan berbasis data pasar nyata. Saat ini calon pembeli biasanya bertanya di grup jual beli Facebook dan sering tidak mendapat balasan, atau bertanya ke chatbot AI yang datanya tidak selalu mengikuti kondisi pasar terkini dan tidak mencocokkan produk dengan pembanding nyata.
 
 Tujuan utama aplikasi adalah menyediakan platform yang mengumpulkan harga dari tiga sumber pasar (Facebook Marketplace, Tokopedia, Shopee) secara terjadwal, lalu menghitung skor worth it untuk produk yang ditanyakan user berdasarkan pembanding harga dan spesifikasi sejenis. Aplikasi punya dua mode, PC untuk komponen individual dan Laptop untuk unit utuh, karena struktur harga dan cara menilai keduanya berbeda.
 
@@ -34,7 +34,7 @@ Fitur-fitur kunci yang harus ada dalam versi pertama (MVP):
 ## 4. User Flow
 Alur kerja sederhana bagi user saat menggunakan aplikasi:
 
-1. **Pilih Mode:** User membuka HargaPas dan memilih mode PC atau Laptop.
+1. **Pilih Mode:** User membuka WorthGaBang? dan memilih mode PC atau Laptop.
 2. **Input Produk:** User memasukkan produk yang ingin dicek, misalnya "RTX 4060, harga Rp 3.500.000" untuk mode PC, atau spesifikasi lengkap dan harga untuk mode Laptop.
 3. **Pencarian Pembanding:** Sistem mencari produk sejenis dari katalog yang sudah dinormalisasi, bukan scraping langsung saat itu juga.
 4. **Perhitungan Skor:** Analysis engine menghitung posisi harga produk yang ditanya relatif terhadap pembanding, lalu menyusun rekomendasi.
@@ -156,7 +156,7 @@ erDiagram
 ## 7. Design & Technical Constraints
 
 ### 7.1 Tech Stack
-Rekomendasi paling pas buat HargaPas: **Python dengan FastAPI** untuk backend, scraper, dan scheduler dalam satu codebase yang sama, **PostgreSQL** (lewat Supabase biar setup-nya cepat) untuk database, dan **Next.js** untuk frontend.
+Rekomendasi paling pas buat WorthGaBang?: **Python dengan FastAPI** untuk backend, scraper, dan scheduler dalam satu codebase yang sama, **PostgreSQL** (lewat Supabase biar setup-nya cepat) untuk database, dan **Next.js** untuk frontend.
 
 Alasannya, scraping dan normalisasi data paling kuat dikerjakan di Python lewat requests, BeautifulSoup, dan pandas. Kalau backend API juga pakai Python lewat FastAPI, seluruh logic data (scraping, cron, analysis engine) jalan di satu bahasa yang sama tanpa perlu integrasi lintas bahasa. Pendekatan ini juga selaras dengan pengalaman yang sudah ada di kompetisi data (Kaggle) dan sistem fuzzy Tsukamoto, karena logic scoring worth it nantinya bisa dikembangkan dengan pendekatan serupa. Next.js dipilih untuk frontend karena pola ini sudah pernah dipakai di proyek hackathon sebelumnya, jadi kurva belajarnya rendah.
 

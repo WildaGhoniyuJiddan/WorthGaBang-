@@ -118,16 +118,16 @@ def _load_new_price_ref() -> dict:
 def _anchor_key(query: str) -> str | None:
     """Key model GPU/CPU dari query; format sama dengan generator anchor komponen retail."""
     q = " ".join((query or "").lower().split())
-    m = re.search(r"(rtx|gtx)\s*(\d{3,4})\s*(ti|super)?", q)
+    m = re.search(r"\b(rtx|gtx)\s*(\d{3,4})\s*(ti|super)?\b", q)
     if m:
         return f"{m.group(1)} {m.group(2)}{(' ' + m.group(3)) if m.group(3) else ''}"
-    m = re.search(r"rx\s*(\d{4})\s*(xt)?", q)
+    m = re.search(r"\brx\s*(\d{3,4})\s*(xt)?\b", q)
     if m:
         return f"rx {m.group(1)}{(' xt') if m.group(2) else ''}"
-    m = re.search(r"ryzen\s*([3579])\s*((?:9\d{3}|[357]\d{3}))", q)
+    m = re.search(r"\bryzen\s*([3579])\s*((?:9\d{3}|[357]\d{3}|\d{4}))\b", q)
     if m:
         return f"ryzen {m.group(1)} {m.group(2)}"
-    m = re.search(r"core i([3579])\s*-?\s*((?:10|11|12|13|14)\d{3})", q)
+    m = re.search(r"\bcore\s*i([3579])\s*-?\s*((?:10|11|12|13|14)\d{3}|\d{4})\b", q)
     if m:
         return f"core i{m.group(1)} {m.group(2)}"
     return None
@@ -396,6 +396,62 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
         )
         for similarity, row in selected
     ]
+
+
+def resolve_bundle_item_prices(session: Session, query: str, component_type: str | None = None) -> tuple[int, int | None, int | None]:
+    """Resolusi harga baru & bekas untuk 1 item bundle dari database & katalog retail.
+
+    Return: (reference_price, new_reference_price, used_reference_price)
+    """
+    ctype = component_type or component_type_from_query(query)
+
+    # 1. Cek anchor harga baru retail (PCPartPicker/Buildcores/Retail catalog)
+    anchor = new_price_anchor(query, ctype)
+
+    # 2. Cek pembanding di database (RawListing)
+    req = AnalyzeRequest(
+        mode="pc",
+        query=query,
+        price=1,
+        component_type=ctype,
+        condition="any",
+    )
+    comps = _pc_comparisons(session, req)
+    new_prices = [c.price for c in comps if (c.condition or "new") == "new" and c.price > 0]
+    used_prices = [c.price for c in comps if c.condition == "second" and c.price > 0]
+
+    # 3. Fallback pencocokan langsung di database jika comps kosong dan anchor belum ada
+    if not new_prices and not anchor:
+        tokens = _model_tokens(query, ctype)
+        if tokens:
+            cats = ("vga", "processor", "motherboard", "ram", "ssd", "harddisk", "pc")
+            direct_rows = session.scalars(
+                select(RawListing).where(
+                    RawListing.category.in_(cats),
+                    RawListing.raw_price >= 50_000,
+                ).limit(3000)
+            ).all()
+            for r in direct_rows:
+                if r.raw_price and r.raw_price > 0:
+                    rt = (r.raw_title or "").lower()
+                    if all(t in rt for t in tokens):
+                        if r.condition == "second":
+                            used_prices.append(r.raw_price)
+                        else:
+                            new_prices.append(r.raw_price)
+
+    new_ref = anchor or (int(sorted(new_prices)[len(new_prices) // 2]) if new_prices else None)
+    used_ref = int(sorted(used_prices)[len(used_prices) // 2]) if used_prices else None
+
+    # Jika harga bekas tidak ada di listing, estimasikan rasio depresiasi hardware wajar (70% dari harga baru)
+    if used_ref is None and new_ref:
+        used_ref = int(new_ref * 0.70)
+    elif new_ref is None and used_ref:
+        new_ref = int(used_ref / 0.70)
+
+    # Primary reference default ke harga baru jika ada, atau bekas jika hanya ada bekas, atau 0
+    ref_primary = new_ref or used_ref or 0
+    return ref_primary, new_ref, used_ref
 
 
 def _cpu_tier(sig: str | None) -> str | None:

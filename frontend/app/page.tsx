@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   analyzeBundle,
   analyzePrice,
@@ -71,6 +71,7 @@ export default function HomePage() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setResult(null);
     try {
       const analysis = await analyzePrice({
         mode,
@@ -98,57 +99,63 @@ export default function HomePage() {
 
   return (
     <main className="page-shell">
-      <section className="hero">
-        <div className="eyebrow">WorthGaBang / marketplace intelligence</div>
-        <h1>Harga yang kamu temukan, <span>masuk akal nggak?</span></h1>
-        <p>Bandingkan dengan data listing yang sudah dikumpulkan dari marketplace, tanpa menunggu scraping saat request.</p>
-      </section>
+      <header className="hero">
+        <div className="eyebrow">WorthGaBang? / marketplace intelligence</div>
+        <h1>Worth <span>ga bang?</span></h1>
+        <p>Cek harga pasar komponen PC, laptop, dan paket bundle rakitan secara instan berbasis data riil marketplace dan katalog retail resmi.</p>
+      </header>
 
       <section className="workspace">
-        <div className="mode-toggle" role="tablist" aria-label="Mode analisis">
-          <button className={mode === "pc" ? "active" : ""} onClick={() => switchMode("pc")} type="button">PC Components</button>
+        <div className="mode-toggle">
+          <button className={mode === "pc" ? "active" : ""} onClick={() => switchMode("pc")} type="button">Komponen PC</button>
           <button className={mode === "laptop" ? "active" : ""} onClick={() => switchMode("laptop")} type="button">Laptop</button>
-          <button className={mode === "bundle" ? "active" : ""} onClick={() => switchMode("bundle")} type="button">Bundle Paket</button>
+          <button className={mode === "bundle" ? "active" : ""} onClick={() => switchMode("bundle")} type="button">Paket Bundle</button>
         </div>
 
         {mode === "bundle" ? (
           <form className="checker-card" onSubmit={handleBundleSubmit}>
             <div className="form-heading">
               <div>
-                <div className="section-kicker">Mode Bundle</div>
-                <h2>Cek paket bundling komponen</h2>
+                <div className="section-kicker">Mode Bundle Rakitan</div>
+                <h2>Cek kelayakan harga paket PC</h2>
               </div>
-              <span className="status-pill"><i /> Referensi katalog retail</span>
+              <span className="status-pill"><i /> Multi-komponen</span>
             </div>
 
             {bundleCards.map((card, index) => (
-              <div className="bundle-card" key={index}>
+              <div key={index} className="bundle-card">
                 <div className="bundle-card-head">
                   <span className="rank">0{index + 1}</span>
-                  <select value={card.component_type} onChange={(event) => updateCard(index, { component_type: event.target.value })} aria-label={`Jenis komponen ${index + 1}`}>
+                  <select
+                    value={card.component_type}
+                    onChange={(event) => updateCard(index, { component_type: event.target.value })}
+                  >
                     <option value="cpu">CPU</option>
-                    <option value="motherboard">Mobo</option>
                     <option value="gpu">GPU</option>
+                    <option value="motherboard">Motherboard</option>
                     <option value="ram">RAM</option>
                     <option value="storage">Storage</option>
                   </select>
                   {bundleCards.length > 1 && (
-                    <button type="button" className="bundle-remove" onClick={() => setBundleCards((cards) => cards.filter((_, i) => i !== index))} aria-label={`Hapus komponen ${index + 1}`}>✕</button>
+                    <button
+                      type="button"
+                      className="bundle-remove"
+                      onClick={() => setBundleCards((cards) => cards.filter((_, i) => i !== index))}
+                      title="Hapus baris"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
                 <label>
-                  Model komponen
+                  Nama / Tipe Komponen
                   <SuggestInput
-                    value={card.query}
-                    onChange={(value) => updateCard(index, { query: value })}
                     section={card.component_type}
-                    condition="new"
-                    placeholder={card.component_type === "motherboard" ? "contoh: MSI PRO B650M-B" : card.component_type === "cpu" ? "contoh: Ryzen 5 7500F" : "nama model"}
+                    value={card.query}
+                    onChange={(val) => updateCard(index, { query: val })}
+                    placeholder={`Contoh: ${card.component_type === "cpu" ? "Ryzen 5 5600" : card.component_type === "gpu" ? "RTX 3060" : "B550M"}`}
+                    required
                   />
-                </label>
-                <label>
-                  Harga per item — opsional, kosongkan kalau harga gabungan
-                  <div className="input-prefix"><span>Rp</span><input value={card.price} onChange={(event) => updateCard(index, { price: event.target.value.replace(/\D/g, "") })} inputMode="numeric" placeholder="kosong = ikut bundle" /></div>
                 </label>
               </div>
             ))}
@@ -163,7 +170,19 @@ export default function HomePage() {
             </label>
 
             {error && <div className="error-box">{error}</div>}
-            <button className="submit-button" disabled={loading} type="submit">{loading ? "Menganalisis..." : "Cek worth it"}<span>↗</span></button>
+            <button className="submit-button" disabled={loading} type="submit">
+              {loading ? (
+                <span className="button-loading-content">
+                  <span className="button-spinner" />
+                  <span>Menganalisis bundle...</span>
+                </span>
+              ) : (
+                <>
+                  <span>Cek worth it</span>
+                  <span>↗</span>
+                </>
+              )}
+            </button>
           </form>
         ) : (
         <form className="checker-card" onSubmit={handleSubmit}>
@@ -175,69 +194,75 @@ export default function HomePage() {
             <span className="status-pill"><i /> {condition === "new" ? "Pool Baru · katalog retail" : condition === "second" ? "Pool Bekas · marketplace" : "Data katalog"}</span>
           </div>
 
-          <label>
-            Nama / query produk
-            <SuggestInput
-              value={query}
-              onChange={setQuery}
-              section={suggestSection}
-              condition={condition}
-              placeholder={mode === "pc" ? "contoh: RTX 4060" : "contoh: ASUS ROG RTX 4060"}
-            />
-          </label>
-
           <div className="form-grid">
-            <label>
-              Harga yang ditemukan
-              <div className="input-prefix"><span>Rp</span><input value={price} onChange={(event) => setPrice(event.target.value.replace(/\D/g, ""))} inputMode="numeric" required /></div>
-            </label>
-            {mode === "pc" ? (
-              <>
-                <label>
-                  Jenis komponen
-                  <select value={componentType} onChange={(event) => setComponentType(event.target.value)}>
-                    <option value="gpu">GPU / VGA</option>
-                    <option value="cpu">CPU / Processor</option>
-                    <option value="ram">RAM</option>
-                    <option value="storage">Storage</option>
-                    <option value="motherboard">Motherboard</option>
-                  </select>
-                </label>
-                <label>
-                  Kondisi komponen
-                  <select value={condition} onChange={(event) => setCondition(event.target.value)}>
-                    <option value="any">Semua kondisi</option>
-                    <option value="new">Baru</option>
-                    <option value="second">Bekas</option>
-                  </select>
-                </label>
-              </>
-            ) : (
+            {mode === "pc" && (
               <label>
-                Kondisi unit
-                <select value={condition} onChange={(event) => setCondition(event.target.value)}>
-                  <option value="any">Semua kondisi</option>
-                  <option value="new">Baru</option>
-                  <option value="second">Bekas</option>
+                Tipe Komponen
+                <select value={componentType} onChange={(event) => setComponentType(event.target.value)}>
+                  <option value="gpu">GPU / VGA</option>
+                  <option value="cpu">Processor / CPU</option>
+                  <option value="ram">RAM</option>
+                  <option value="storage">Storage / SSD</option>
+                  <option value="motherboard">Motherboard</option>
                 </select>
               </label>
             )}
+
+            <label>
+              Kondisi Unit
+              <select value={condition} onChange={(event) => setCondition(event.target.value)}>
+                <option value="any">Semua Kondisi (Baru &amp; Bekas)</option>
+                <option value="new">Baru Saja (Katalog Retail / BNIB)</option>
+                <option value="second">Bekas Saja (Marketplace)</option>
+              </select>
+            </label>
           </div>
+
+          <label>
+            {mode === "pc" ? "Model Komponen" : "Model Laptop"}
+            <SuggestInput
+              section={suggestSection}
+              value={query}
+              onChange={setQuery}
+              onSelectPrice={(p) => setPrice(String(p))}
+              placeholder={mode === "pc" ? "Contoh: RTX 3060 atau RX 6600" : "Contoh: Lenovo Legion 5 atau Asus TUF"}
+              required
+            />
+          </label>
+
+          <label>
+            Harga yang Anda Temukan
+            <div className="input-prefix"><span>Rp</span><input value={price} onChange={(event) => setPrice(event.target.value.replace(/\D/g, ""))} inputMode="numeric" required /></div>
+          </label>
 
           {mode === "laptop" && (
             <div className="form-grid three-cols">
-              <label>CPU<input value={cpu} onChange={(event) => setCpu(event.target.value)} placeholder="Core i5 / Ryzen 5" autoComplete="off" /></label>
+              <label>CPU<input value={cpu} onChange={(event) => setCpu(event.target.value)} placeholder="Ryzen 7 5800H" autoComplete="off" /></label>
               <label>GPU<input value={gpu} onChange={(event) => setGpu(event.target.value)} placeholder="RTX 4060" autoComplete="off" /></label>
               <label>RAM / Storage<div className="dual-input"><input value={ram} onChange={(event) => setRam(event.target.value.replace(/\D/g, ""))} placeholder="16 GB" /><input value={storage} onChange={(event) => setStorage(event.target.value.replace(/\D/g, ""))} placeholder="512 GB" /></div></label>
             </div>
           )}
 
           {error && <div className="error-box">{error}</div>}
-          <button className="submit-button" disabled={loading} type="submit">{loading ? "Menganalisis..." : "Cek worth it"}<span>↗</span></button>
+          <button className="submit-button" disabled={loading} type="submit">
+            {loading ? (
+              <span className="button-loading-content">
+                <span className="button-spinner" />
+                <span>Menganalisis pasar...</span>
+              </span>
+            ) : (
+              <>
+                <span>Cek worth it</span>
+                <span>↗</span>
+              </>
+            )}
+          </button>
         </form>
         )}
 
-        {mode === "bundle"
+        {loading ? (
+          <LoadingCard mode={mode} />
+        ) : mode === "bundle"
           ? bundleResult
             ? <BundleResultCard result={bundleResult} />
             : <div className="empty-state"><span>✦</span><p>Hasil cek bundle akan muncul di sini.<br />Tambahkan komponen lalu masukkan harga paketnya.</p></div>
@@ -246,8 +271,92 @@ export default function HomePage() {
             : <div className="empty-state"><span>✦</span><p>Hasil analisis akan muncul di sini.<br />Masukkan produk untuk mulai membandingkan.</p></div>}
       </section>
 
-      <footer><span>WorthGaBang</span><span>Data pembanding diperbarui terjadwal · v1 MVP</span></footer>
+      <footer><span>WorthGaBang?</span><span>Data pembanding diperbarui terjadwal · v1 MVP</span></footer>
     </main>
+  );
+}
+
+function LoadingCard({ mode }: { mode: Mode }) {
+  const [step, setStep] = useState(0);
+
+  const steps =
+    mode === "bundle"
+      ? [
+          "Mengurai komponen paket bundle...",
+          "Mengecek katalog harga retail resmi...",
+          "Memindai harga pasar bekas lepasan...",
+          "Menghitung kalkulasi dual-market & penghematan...",
+          "Menyusun rekomendasi kelayakan paket bundle...",
+        ]
+      : mode === "laptop"
+      ? [
+          "Menganalisis konfigurasi CPU, GPU, & RAM...",
+          "Memeriksa katalog retail unit baru (BNIB)...",
+          "Memindai ribuan listing laptop di pasar bekas...",
+          "Mengevaluasi skor worth-it & kalkulasi pasar...",
+          "Menyusun analisis lintas pasar baru vs bekas...",
+        ]
+      : [
+          "Mencocokkan model & tier spesifikasi komponen...",
+          "Mengambil harga retail baru dari katalog resmi...",
+          "Memindai listing aktif di pasar marketplace...",
+          "Mengevaluasi harga vs performa (worth-it score)...",
+          "Menyiapkan daftar opsi pembanding terbaik...",
+        ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((prev) => (prev + 1) % steps.length);
+    }, 1100);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  return (
+    <section className="result-card loading-card">
+      <div className="result-topline">
+        <div className="section-kicker">MEMERIKSA DATA PASAR...</div>
+        <span className="loading-badge">
+          <span className="pulse-dot" /> SEDANG MEMINDAI
+        </span>
+      </div>
+
+      <div className="loading-progress-bar">
+        <div className="loading-progress-fill" />
+      </div>
+
+      <div className="loading-status-box">
+        <div className="loading-pulse-radar">⚡</div>
+        <div className="loading-status-text">
+          <span className="loading-status-title">{steps[step]}</span>
+          <span className="loading-status-sub">Menghubungkan ke database harga baru &amp; pasar bekas</span>
+        </div>
+      </div>
+
+      <div className="skeleton-score-row">
+        <div>
+          <div className="skeleton-shimmer skeleton-score-val" />
+          <div className="skeleton-shimmer skeleton-score-desc" />
+        </div>
+        <div className="skeleton-price-meta">
+          <div className="skeleton-shimmer skeleton-price-line-1" />
+          <div className="skeleton-shimmer skeleton-price-line-2" />
+          <div className="skeleton-shimmer skeleton-price-line-3" />
+        </div>
+      </div>
+
+      <div className="skeleton-dual-market">
+        <div className="skeleton-shimmer skeleton-market-card" />
+        <div className="skeleton-shimmer skeleton-market-card" />
+      </div>
+
+      <div className="skeleton-shimmer skeleton-box" />
+
+      <div className="skeleton-comparisons">
+        <div className="skeleton-shimmer skeleton-row-item" />
+        <div className="skeleton-shimmer skeleton-row-item" />
+        <div className="skeleton-shimmer skeleton-row-item" />
+      </div>
+    </section>
   );
 }
 
@@ -256,13 +365,92 @@ function BundleResultCard({ result }: { result: BundleResult }) {
   const hemat = result.savings_percent >= 0;
   return (
     <section className="result-card">
-      <div className="result-topline"><div className="section-kicker">HASIL CEK BUNDLE</div><span className={`verdict ${verdictClass}`}>{result.verdict}</span></div>
-      <div className="score-row">
-        <div><div className="score-number">{Math.round(result.score)}<small>/100</small></div><div className="score-caption">Skor worth-it paket bundling</div></div>
-        <div className="price-summary"><span>Harga bundle</span><strong>{formatRupiah(result.bundle_price)}</strong><small>Total normal {formatRupiah(result.reference_total)} · <strong className={hemat ? "savings-pos" : "savings-neg"}>{hemat ? "hemat" : "lebih mahal"} {Math.abs(result.savings_percent)}%</strong></small></div>
+      <div className="result-topline">
+        <div className="section-kicker">HASIL CEK BUNDLE</div>
+        <span className={`verdict ${verdictClass}`}>{result.verdict}</span>
       </div>
+      <div className="score-row">
+        <div>
+          <div className="score-number">{Math.round(result.score)}<small>/100</small></div>
+          <div className="score-caption">Skor worth-it paket bundling</div>
+        </div>
+        <div className="price-summary">
+          <span>Harga bundle</span>
+          <strong>{formatRupiah(result.bundle_price)}</strong>
+          <small>
+            Total normal {formatRupiah(result.reference_total)} ·{" "}
+            <strong className={hemat ? "savings-pos" : "savings-neg"}>
+              {hemat ? "hemat" : "lebih mahal"} {Math.abs(result.savings_percent)}%
+            </strong>
+          </small>
+        </div>
+      </div>
+
+      {(result.new_reference_total || result.used_reference_total) && (
+        <div className="dual-market-grid">
+          <div className="market-card market-new">
+            <div className="market-badge-label">🏷️ Total Normal Baru (Retail)</div>
+            <div className="market-price-val">
+              {result.new_reference_total ? formatRupiah(result.new_reference_total) : formatRupiah(result.reference_total)}
+            </div>
+            <div className="market-desc">
+              {result.savings_percent >= 0 ? `Hemat ${result.savings_percent}% beli paket` : `Lebih mahal ${Math.abs(result.savings_percent)}%`}
+            </div>
+          </div>
+          <div className="market-card market-used">
+            <div className="market-badge-label">📦 Total Estimasi Bekas (Eceran)</div>
+            <div className="market-price-val">
+              {result.used_reference_total ? formatRupiah(result.used_reference_total) : "Data Terbatas"}
+            </div>
+            <div className="market-desc">
+              {result.savings_used_percent !== undefined && result.savings_used_percent !== null
+                ? (result.savings_used_percent >= 0
+                    ? `Hemat ${result.savings_used_percent}% vs total bekas`
+                    : `Lebih mahal ${Math.abs(result.savings_used_percent)}% vs bekas`)
+                : "Estimasi part second terpisah"}
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="recommendation">{result.recommendation}</p>
-      <div className="comparisons"><div className="comparison-heading"><h3>Rincian referensi per komponen</h3><span>{result.items.length} komponen</span></div>{result.items.map((item, index) => <div className="comparison-row" key={`${item.query}-${index}`}><span className="rank">0{index + 1}</span><span className="comparison-title">{item.query}<small>{item.component_type}{item.price_input ? ` · harga item ${formatRupiah(item.price_input)}` : ""} · harga normal sendiri</small></span><strong>{formatRupiah(item.reference_price)}</strong><span className="arrow">—</span></div>)}</div>
+
+      {result.cross_market_advice && (
+        <div className="cross-market-box">
+          <div className="cross-market-header">
+            <span className="cross-market-icon">💡</span>
+            <strong>Analisis Lintas Pasar (Baru vs Bekas)</strong>
+          </div>
+          <p className="cross-market-text">{result.cross_market_advice}</p>
+        </div>
+      )}
+
+      <div className="comparisons">
+        <div className="comparison-heading">
+          <h3>Rincian referensi per komponen</h3>
+          <span>{result.items.length} komponen dalam paket</span>
+        </div>
+        {result.items.map((item, index) => (
+          <div className="comparison-row" key={`${item.query}-${index}`}>
+            <span className="rank">0{index + 1}</span>
+            <span className="comparison-title">
+              {item.query}
+              <small>
+                <span className="source-tag source-retail">{item.component_type.toUpperCase()}</span>
+                {item.price_input ? ` · input ${formatRupiah(item.price_input)}` : " · ikut harga bundle"}
+                {item.used_reference_price ? ` · bekas est. ${formatRupiah(item.used_reference_price)}` : ""}
+              </small>
+            </span>
+            <div style={{ textAlign: "right" }}>
+              <strong>{formatRupiah(item.new_reference_price || item.reference_price)}</strong>
+              <small style={{ display: "block", color: "var(--muted)", fontSize: "9px" }}>
+                {item.used_reference_price ? `bekas: ${formatRupiah(item.used_reference_price)}` : "normal baru"}
+              </small>
+            </div>
+            <span className="arrow">—</span>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

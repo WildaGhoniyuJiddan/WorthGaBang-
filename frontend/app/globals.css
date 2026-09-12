@@ -104,3 +104,224 @@ footer { display: flex; justify-content: space-between; color: #8b968f; font-siz
   .comparison-filter-tabs { flex-wrap: wrap; }
 }
 
+/* Loading & Animation Styles */
+.loading-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--soft-green);
+  color: var(--green);
+  border: 1px solid #cce8d4;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: #256b4b;
+  border-radius: 50%;
+  position: relative;
+  display: inline-block;
+}
+
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: #256b4b;
+  opacity: 0.6;
+  animation: pulseRipple 1.4s ease-out infinite;
+}
+
+@keyframes pulseRipple {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.loading-progress-bar {
+  height: 4px;
+  background: #e6ede8;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 16px 0 18px;
+  position: relative;
+}
+
+.loading-progress-fill {
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, var(--green), var(--lime));
+  border-radius: 999px;
+  animation: progressIndeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes progressIndeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(110%); }
+  100% { transform: translateX(250%); }
+}
+
+.loading-status-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f4f8f5;
+  border: 1px solid #d8ebd9;
+  border-radius: 12px;
+  padding: 12px 15px;
+  margin-bottom: 22px;
+}
+
+.loading-pulse-radar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--soft-green);
+  color: var(--green);
+  font-size: 15px;
+  border: 1px solid #c2e2cc;
+  animation: radarGlow 2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes radarGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 107, 75, 0.25); transform: scale(1); }
+  50% { box-shadow: 0 0 0 8px rgba(37, 107, 75, 0); transform: scale(1.04); }
+}
+
+.loading-status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.loading-status-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.loading-status-sub {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+/* Shimmer Skeleton */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f4f1 20%, #e2ece5 50%, #f0f4f1 80%);
+  background-size: 250% 100%;
+  animation: shimmerAnim 1.6s infinite linear;
+  border-radius: 8px;
+}
+
+@keyframes shimmerAnim {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin: 18px 0 16px;
+}
+
+.skeleton-score-val {
+  width: 96px;
+  height: 52px;
+  border-radius: 10px;
+}
+
+.skeleton-score-desc {
+  width: 140px;
+  height: 12px;
+  margin-top: 8px;
+}
+
+.skeleton-price-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.skeleton-price-line-1 { width: 70px; height: 11px; }
+.skeleton-price-line-2 { width: 125px; height: 20px; }
+.skeleton-price-line-3 { width: 160px; height: 12px; }
+
+.skeleton-dual-market {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.skeleton-market-card {
+  height: 80px;
+  border-radius: 12px;
+}
+
+.skeleton-box {
+  height: 52px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+.skeleton-comparisons {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-row-item {
+  height: 42px;
+  border-radius: 8px;
+}
+
+/* Button Loading State */
+.button-loading-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.button-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+

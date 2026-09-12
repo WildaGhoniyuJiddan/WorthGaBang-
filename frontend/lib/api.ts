@@ -70,15 +70,21 @@ export type BundleItemBreakdown = {
   component_type: string;
   price_input?: number | null;
   reference_price: number;
+  new_reference_price?: number | null;
+  used_reference_price?: number | null;
 };
 
 export type BundleResult = {
   bundle_price: number;
   reference_total: number;
+  new_reference_total?: number | null;
+  used_reference_total?: number | null;
   score: number;
   verdict: string;
   recommendation: string;
   savings_percent: number;
+  savings_used_percent?: number | null;
+  cross_market_advice?: string | null;
   items: BundleItemBreakdown[];
 };
 

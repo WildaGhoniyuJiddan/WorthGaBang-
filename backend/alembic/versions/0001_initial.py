@@ -1,4 +1,4 @@
-"""Create HargaPas catalog and analysis tables.
+"""Create WorthGaBang? catalog and analysis tables.
 
 Revision ID: 0001_initial
 """
