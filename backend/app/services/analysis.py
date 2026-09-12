@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -292,15 +292,17 @@ def _gpu_name(text: str) -> str | None:
 
 
 def _cpu_sig(text: str) -> str | None:
-    """Signature CPU laptop ('Core i5-12450H' -> 'corei512450h', 'i7 13650HX' -> 'i713650hx')."""
+    """Signature CPU laptop ('Core i5-12450H' -> 'corei512450h', 'i7 13650HX' -> 'corei713650hx')."""
     m = re.search(r"\b(ryzen(?:\s*ai)?\s*[3579]|core\s*i[3579]|ultra\s*[579]|i[3579])\s*-?\s*(\d{4,5}[a-z]{0,3}|[a-z]{1,4}\d{3}[a-z]{0,3})?\b", (text or "").lower())
     if not m:
         return None
-    fam = re.sub(r"\s+", "", m.group(1))
+    raw_fam = re.sub(r"\s+", "", m.group(1))
+    if re.match(r"^i[3579]$", raw_fam):
+        raw_fam = "core" + raw_fam
     num = m.group(2) or ""
     if not num:
         return None
-    return fam + num
+    return raw_fam + num
 
 
 def _cpu_name(text: str) -> str | None:
@@ -351,29 +353,26 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
     matching = [item for item in scored if item[0] >= 0.75]
     if not matching:
         return []
+
     if request.condition and request.condition != "any":
         wanted = request.condition
-        same = [item for item in matching if (item[1].condition or "new") == wanted]
-        # kalau kondisi itu gak ada samsek, jangan paksa pakai lawannya
-        matching = same
+        matching = [item for item in matching if (item[1].condition or "new") == wanted]
         if not matching:
             return []
+
     # outlier guard: median robust, tapi IQR ekstrem tetap bisa narik anchor;
     # buang harga di luar [Q1-1.5xIQR, Q3+1.5xIQR] sebelum pilih pembanding.
     matching.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
     top = matching[:40]
     prices = sorted(item[1].raw_price or 0 for item in top)
-    q1 = prices[max(0, len(prices) // 4)]
-    q3 = prices[min(len(prices) - 1, (3 * len(prices)) // 4)]
-    iqr = q3 - q1
-    lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-    inliers = [item for item in top if lo <= (item[1].raw_price or 0) <= hi]
-    top = inliers or top
+    if len(prices) >= 4:
+        q1 = prices[max(0, len(prices) // 4)]
+        q3 = prices[min(len(prices) - 1, (3 * len(prices)) // 4)]
+        iqr = q3 - q1
+        lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        inliers = [item for item in top if lo <= (item[1].raw_price or 0) <= hi]
+        top = inliers or top
     anchor = prices[len(prices) // 2]
-    # pilih listing yang harganya paling dekat dengan median supaya output
-    # comparisons representatif, bukan ekstrem termurah/termahal.
-    # Interleave per-sumber: tiap sumber dpt kuota merata lalu di-round-robin,
-    # supaya katalog retail gak selalu kalah dari marketplace yg discrape terakhir.
     top.sort(key=lambda item: abs((item[1].raw_price or 0) - anchor))
     by_source: dict[str, list] = {}
     for item in top:
@@ -385,6 +384,7 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
         for pool in pools:
             if pool and len(selected) < 24:
                 selected.append(pool.pop(0))
+
     return [
         Comparison(
             title=row.raw_title,
@@ -402,7 +402,7 @@ def _cpu_tier(sig: str | None) -> str | None:
     """Tier CPU ('corei712700h' -> '7') utk pencocokan sekelas."""
     if not sig:
         return None
-    m = re.search(r"(?:corei|ryzen|ultra|ryzenai)([3579])", sig)
+    m = re.search(r"(?:corei|ryzen|ultra|ryzenai|i)([3579])", sig)
     return m.group(1) if m else None
 
 
@@ -415,37 +415,97 @@ def _clean_title(text: str | None) -> str:
     return " ".join(cleaned.split())[:180]
 
 
-def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
-    rows = session.scalars(
-        select(LaptopUnit).where(
+def _extract_storage_from_text(text: str) -> int | None:
+    t = (text or "").lower()
+    m_tb = re.search(r"(\d)\s*tb\b", t)
+    if m_tb:
+        return int(m_tb.group(1)) * 1000
+    m_slash = re.search(r"\b\d{1,2}\s*/\s*(\d{3,4})\b", t)
+    if m_slash:
+        return int(m_slash.group(1))
+    m_ssd = re.search(r"\b(128|256|512|1000|1024)\s*(?:gb)?\s*(?:ssd|nvme|storage|rom)?\b", t)
+    if m_ssd:
+        return int(m_ssd.group(1))
+    return None
+
+
+def _extract_ram_from_text(text: str) -> int | None:
+    t = (text or "").lower()
+    m_ram = re.search(r"\bram\s*(\d{1,2})\s*gb\b", t)
+    if m_ram:
+        return int(m_ram.group(1))
+    m_ddr = re.search(r"(\d{1,2})\s*gb\s*(?:ddr|ram|memory)\b", t)
+    if m_ddr:
+        return int(m_ddr.group(1))
+    m_slash = re.search(r"\b(\d{1,2})\s*/\s*\d{3,4}\b", t)
+    if m_slash:
+        return int(m_slash.group(1))
+    return None
+
+
+def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> tuple[list[Comparison], dict]:
+    want_gpu = _gpu_sig(request.gpu or request.query)
+    want_cpu = _cpu_sig(request.cpu)
+    if want_cpu is None and not request.gpu:
+        want_cpu = _cpu_sig(request.query)
+
+    gpu_num_match = re.search(r"\b(\d{3,4})\b", request.gpu or request.query or "")
+    gpu_num = gpu_num_match.group(1) if gpu_num_match else None
+
+    GENERIC_WORDS = {"laptop", "notebook", "gaming", "pro", "plus", "max", "ultra", "inch", "ti", "super", "intel", "amd"}
+    query_tokens = [t for t in _tokens(f"{request.brand or ''} {request.query}") if t not in GENERIC_WORDS and len(t) >= 3]
+
+    conds = []
+    if gpu_num:
+        conds.append(LaptopUnit.gpu.ilike(f"%{gpu_num}%"))
+        conds.append(LaptopUnit.model.ilike(f"%{gpu_num}%"))
+    for t in query_tokens:
+        conds.append(LaptopUnit.model.ilike(f"%{t}%"))
+        conds.append(LaptopUnit.brand.ilike(f"%{t}%"))
+
+    rows: list[LaptopUnit] = []
+    if conds:
+        stmt = select(LaptopUnit).where(
             LaptopUnit.price >= 500_000,
             LaptopUnit.price <= 150_000_000,
             (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
-        ).order_by(desc(LaptopUnit.scraped_at)).limit(1000)
-    ).all()
-    # Spek yang diisi user jadi HARD-GATE (ala komponen PC):
-    #   - GPU & CPU: token model PERSIS — "RTX 4060" gak boleh kena "RTX 4050".
-    #   - RAM & Storage: minimal sama dgn input (16GB boleh pembanding 32GB).
-    # Unit tanpa data spek di dimensi yg diminta = gugur (bukan tebak-tebakan).
-    want_gpu = _gpu_sig(request.gpu or request.query)
-    want_cpu = _cpu_sig(request.cpu)
-    # CPU cuma diisi di kolom query? coba ekstrak dari sana (GPU sudah diambil dulu).
-    if want_cpu is None and not request.gpu:
-        want_cpu = _cpu_sig(request.query)
+            or_(*conds),
+        ).order_by(desc(LaptopUnit.scraped_at)).limit(4000)
+        rows = list(session.scalars(stmt).all())
+
+    if len(rows) < 30:
+        seen_ids = {r.id for r in rows}
+        for src in ("notebook_retail", "tokopedia"):
+            extra = session.scalars(
+                select(LaptopUnit).where(
+                    LaptopUnit.price >= 500_000,
+                    LaptopUnit.price <= 150_000_000,
+                    (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
+                    LaptopUnit.source == src,
+                ).order_by(desc(LaptopUnit.scraped_at)).limit(1500)
+            ).all()
+            for r in extra:
+                if r.id not in seen_ids:
+                    rows.append(r)
+                    seen_ids.add(r.id)
+
     min_ram = request.ram_gb or None
     min_storage = request.storage_gb or None
-    scored: list[tuple[float, LaptopUnit]] = []
+    scored_new: list[tuple[float, LaptopUnit]] = []
+    scored_used: list[tuple[float, LaptopUnit]] = []
+    now = datetime.now(timezone.utc)
+    wanted = _tokens(" ".join(filter(None, [request.brand or "", request.query])))
+    brand_prefix = (request.query.lower().split()[0] if request.query else (request.brand or "").lower())
+
     for row in rows:
-        if request.condition and request.condition != "any" and row.condition and row.condition != request.condition:
-            continue
         title = f"{row.brand or ''} {row.model or ''} {row.cpu or ''} {row.gpu or ''}"
         got_gpu = _gpu_sig(title)
         got_cpu = _cpu_sig(title)
-        # GPU = HARD-GATE: identitas performa utama laptop gaming.
+
+        # GPU = identitas performa utama laptop gaming.
         if want_gpu and got_gpu != want_gpu:
             continue
-        # CPU bertingkat: persis > sekelas > LEBIH TINGGI (opsi menarik, diterima)
-        # > tak terbaca (penalti) > KELAS DI BAWAH = bukan pembanding wajar.
+
         cpu_penalty = 0.0
         if want_cpu:
             got_tier = _cpu_tier(got_cpu) if got_cpu else None
@@ -453,44 +513,117 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
             if got_cpu == want_cpu:
                 pass
             elif got_tier is not None and got_tier == want_tier:
-                cpu_penalty = 0.15
+                cpu_penalty = 0.10
             elif got_tier is not None and want_tier is not None and got_tier > want_tier:
-                cpu_penalty = 0.2
+                cpu_penalty = 0.15
             elif got_cpu is None:
-                cpu_penalty = 0.25
+                cpu_penalty = 0.20
             else:
-                continue  # kelas di bawah yang diminta (i5 saat minta i7)
-        if min_ram and (row.ram_gb or 0) < min_ram:
-            continue
-        if min_storage and (row.storage_gb or 0) < min_storage:
-            continue
-        now = datetime.now(timezone.utc)
-        wanted = _tokens(" ".join(filter(None, [request.brand or "", request.query])))
+                continue  # kelas di bawah yang diminta
+
+        effective_ram = row.ram_gb or _extract_ram_from_text(title)
+        effective_storage = row.storage_gb or _extract_storage_from_text(title)
+        spec_penalty = 0.0
+        if min_ram:
+            if effective_ram is not None and effective_ram < min_ram:
+                if effective_ram <= min_ram // 2:
+                    continue
+                spec_penalty += 0.10
+            elif effective_ram is None:
+                spec_penalty += 0.05
+
+        if min_storage:
+            if effective_storage is not None and effective_storage < min_storage:
+                if effective_storage <= min_storage // 2:
+                    continue
+                spec_penalty += 0.10
+            elif effective_storage is None:
+                spec_penalty += 0.05
+
         actual = _tokens(f"{row.brand or ''} {row.model or ''}")
-        similarity = round(len(wanted & actual) / len(wanted), 3) if wanted else 0.3
-        similarity = max(0.05, similarity - cpu_penalty - _age_penalty(row.scraped_at, now))
-        scored.append((similarity, row))
-    pool = sorted(scored, key=lambda item: (item[0], item[1].scraped_at), reverse=True)
-    if not pool:
+        if wanted:
+            overlap = len(wanted & actual)
+            overlap_sim = round(overlap / len(wanted), 3)
+            # Baseline kemiripan: jika GPU sama persis, baseline minimal 0.50
+            base = 0.50 if (want_gpu and got_gpu == want_gpu) else 0.30
+            raw_sim = max(base, overlap_sim)
+            if brand_prefix and brand_prefix in actual:
+                raw_sim = min(1.0, raw_sim + 0.15)
+            for qt in query_tokens:
+                if qt in actual:
+                    raw_sim = min(1.0, raw_sim + 0.20)
+                    break
+        else:
+            raw_sim = 0.5
+
+        similarity = max(0.05, raw_sim - cpu_penalty - spec_penalty - _age_penalty(row.scraped_at, now))
+        if row.condition == "second":
+            scored_used.append((similarity, row))
+        else:
+            scored_new.append((similarity, row))
+
+    if not scored_new and not scored_used:
         return [], {}
-    # Interleave per-sumber (retail vs marketplace) biar variatif + dedup judul
-    # (listing sama sering terindeks 2-3x dari query berbeda).
-    by_source: dict[str, list] = {}
-    seen_titles: set[str] = set()
-    for item in pool:
-        key = item[1].source or "lain"
-        title_key = _clean_title(item[1].model or item[1].brand or "Laptop").lower()[:80]
-        if title_key in seen_titles:
-            continue
-        seen_titles.add(title_key)
-        by_source.setdefault(key, []).append(item)
-    quota = max(2, (24 + len(by_source) - 1) // len(by_source))
-    pools = [p[:quota] for p in by_source.values()]
-    selected = []
-    while any(pools) and len(selected) < 24:
-        for p in pools:
-            if p and len(selected) < 24:
-                selected.append(p.pop(0))
+
+    def _process_laptop_pool(candidates: list[tuple[float, LaptopUnit]], limit_count: int) -> list[tuple[float, LaptopUnit]]:
+        if not candidates:
+            return []
+        candidates.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
+        high_sim = [item for item in candidates if item[0] >= 0.4]
+        pool = high_sim if len(high_sim) >= 3 else candidates
+        top_candidates = pool[:50]
+        prices = sorted(item[1].price or 0 for item in top_candidates if item[1].price)
+        if len(prices) >= 4:
+            q1 = prices[len(prices) // 4]
+            q3 = prices[(3 * len(prices)) // 4]
+            iqr = q3 - q1
+            lo, hi = max(500_000, q1 - 1.5 * iqr), q3 + 1.5 * iqr
+            inliers = [item for item in top_candidates if lo <= (item[1].price or 0) <= hi]
+            top_candidates = inliers or top_candidates
+
+        by_source: dict[str, list] = {}
+        seen_titles: set[str] = set()
+        for item in top_candidates:
+            key = item[1].source or "lain"
+            title_key = _clean_title(item[1].model or item[1].brand or "Laptop").lower()[:80]
+            if title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
+            by_source.setdefault(key, []).append(item)
+
+        total_items = sum(len(v) for v in by_source.values())
+        if total_items < limit_count:
+            for item in candidates:
+                key = item[1].source or "lain"
+                title_key = _clean_title(item[1].model or item[1].brand or "Laptop").lower()[:80]
+                if title_key not in seen_titles:
+                    seen_titles.add(title_key)
+                    by_source.setdefault(key, []).append(item)
+                    if sum(len(v) for v in by_source.values()) >= limit_count:
+                        break
+
+        quota = max(2, (limit_count + len(by_source) - 1) // len(by_source))
+        pools = [p[:quota] for p in by_source.values()]
+        selected_items = []
+        while any(pools) and len(selected_items) < limit_count:
+            for p in pools:
+                if p and len(selected_items) < limit_count:
+                    selected_items.append(p.pop(0))
+        return selected_items
+
+    if request.condition == "new":
+        sel_new = _process_laptop_pool(scored_new, 16)
+        sel_used = _process_laptop_pool(scored_used, 8)
+        selected = sel_new + sel_used if sel_new else _process_laptop_pool(scored_used + scored_new, 24)
+    elif request.condition == "second":
+        sel_used = _process_laptop_pool(scored_used, 16)
+        sel_new = _process_laptop_pool(scored_new, 8)
+        selected = sel_used + sel_new if sel_used else _process_laptop_pool(scored_new + scored_used, 24)
+    else:
+        sel_new = _process_laptop_pool(scored_new, 12)
+        sel_used = _process_laptop_pool(scored_used, 12)
+        selected = sel_new + sel_used if (sel_new or sel_used) else _process_laptop_pool(scored_new + scored_used, 24)
+
     return [
         Comparison(
             title=_clean_title(row.model or row.brand or "Laptop"),
@@ -498,14 +631,68 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> list[Compa
             source=row.source,
             listing_url=row.listing_url,
             similarity=similarity,
-            condition=row.condition,
+            condition=row.condition or "new",
         )
         for similarity, row in selected
     ], {
-        # teks spek utk resolver benchmark per pembanding terpilih
         _clean_title(row.model or row.brand or "Laptop"): {"cpu": row.cpu, "gpu": row.gpu}
         for _, row in selected
     }
+
+
+def _generate_cross_market_advice(
+    condition: str | None,
+    price: int,
+    new_ref: int | None,
+    used_ref: int | None,
+    query: str,
+    mode: str,
+) -> str | None:
+    price_fmt = f"Rp{price:,}".replace(",", ".")
+    new_fmt = f"Rp{new_ref:,}".replace(",", ".") if new_ref else None
+    used_fmt = f"Rp{used_ref:,}".replace(",", ".") if used_ref else None
+
+    if condition == "new":
+        if new_ref and used_ref:
+            pct_savings = round(((new_ref - used_ref) / new_ref) * 100)
+            return (
+                f"🏷️ Di pasar baru, median referensi adalah {new_fmt}. "
+                f"📦 Sebagai opsi alternatif, unit sekelas di pasar bekas beredar sekitar {used_fmt} (hemat ~{pct_savings}%). "
+                f"Dengan budget {price_fmt}, di pasar bekas Anda juga berpotensi mendapatkan unit ber-tier performa lebih tinggi."
+            )
+        elif new_ref:
+            return f"🏷️ Di pasar baru, harga referensi retail terpantau di kisaran {new_fmt}."
+        elif used_ref:
+            return f"📦 Data retail baru terbatas. Sebagai perbandingan, di pasar bekas beredar sekitar {used_fmt}."
+
+    elif condition == "second":
+        if used_ref and new_ref:
+            if price < new_ref:
+                pct_savings = round(((new_ref - price) / new_ref) * 100)
+                return (
+                    f"📦 Di pasar bekas, harga referensi sekelas adalah {used_fmt}. "
+                    f"🏷️ Dibandingkan harga retail baru ({new_fmt}), tawaran bekas seharga {price_fmt} menghemat sekitar {pct_savings}%. "
+                    f"Pastikan cek kesehatan fisik, suhu termal, dan fungsi komponen sebelum bertransaksi."
+                )
+            else:
+                return (
+                    f"📦 Di pasar bekas, harga referensi sekelas adalah {used_fmt}. "
+                    f"⚠️ Perhatian: tawaran bekas {price_fmt} mendekati atau melebihi harga unit baru ({new_fmt}). "
+                    f"Sangat disarankan membeli unit baru retail untuk jaminan garansi resmi."
+                )
+        elif used_ref:
+            return f"📦 Di pasar bekas, unit/komponen sekelas terpantau di kisaran {used_fmt}."
+        elif new_ref:
+            return f"🏷️ Data pasar bekas terbatas. Sebagai perbandingan, unit baru di retail dibanderol sekitar {new_fmt}."
+
+    else:
+        if new_ref and used_ref:
+            pct_savings = round(((new_ref - used_ref) / new_ref) * 100)
+            return (
+                f"🏷️ Pasar Baru: referensi {new_fmt} | 📦 Pasar Bekas: referensi {used_fmt} (selisih ~{pct_savings}%). "
+                f"Sesuaikan pilihan dengan prioritas garansi resmi vs efisiensi budget."
+            )
+    return None
 
 
 def _laptop_benchmark_advice(request: AnalyzeRequest, comparisons, spec_map: dict, result) -> tuple[str, list[dict]]:
@@ -604,13 +791,34 @@ def analyze(session: Session, request: AnalyzeRequest):
         )
         if user_combo:
             tier_label = user_combo.get("tier_label")
-    result = score_price(request.price, [comparison.price for comparison in comparisons])
+
+    # Dual-market reference calculation
+    new_comps = [c for c in comparisons if (c.condition or "new") == "new"]
+    used_comps = [c for c in comparisons if c.condition == "second"]
+
+    new_prices = [c.price for c in new_comps if c.price]
+    used_prices = [c.price for c in used_comps if c.price]
+
+    new_ref = int(sorted(new_prices)[len(new_prices) // 2]) if new_prices else None
+    used_ref = int(sorted(used_prices)[len(used_prices) // 2]) if used_prices else None
+
+    # Tentukan harga pembanding primer berdasarkan preferensi kondisi user
+    if request.condition == "new" and len(new_prices) >= 2:
+        primary_prices = new_prices
+    elif request.condition == "second" and len(used_prices) >= 2:
+        primary_prices = used_prices
+    else:
+        primary_prices = [c.price for c in comparisons if c.price]
+
+    result = score_price(request.price, primary_prices)
+
     # fallback anchor harga BARU dari katalog referensi (buildcores+PCPartPicker)
     # kalau listing second yang relevan gak cukup untuk kasih verdict.
     if (result.verdict == "data terbatas" or not comparisons) and request.condition != "second":
         ref_new = new_price_anchor(request.query, request.component_type)
         if ref_new:
             result = score_price(request.price, [ref_new], is_new_reference=True)
+            new_ref = new_ref or ref_new
             if not comparisons:
                 comparisons = [
                     Comparison(
@@ -622,6 +830,17 @@ def analyze(session: Session, request: AnalyzeRequest):
                         condition="new",
                     )
                 ]
+
+    # Generate cross-market intelligence advice
+    cross_advice = _generate_cross_market_advice(
+        condition=request.condition,
+        price=request.price,
+        new_ref=new_ref,
+        used_ref=used_ref,
+        query=request.query,
+        mode=request.mode,
+    )
+
     # Sumber utama = sumber paling banyak di pembanding (bukan cuma baris pertama).
     if comparisons:
         counts: dict[str, int] = {}
@@ -630,31 +849,29 @@ def analyze(session: Session, request: AnalyzeRequest):
         selected_source = max(counts, key=counts.get)
     else:
         selected_source = "tokopedia"
+
     # Sinyal benchmark PassMark: kalau harga jelek, kasih alternatif konkret.
     if request.mode == "laptop":
         advice, alternatives = _laptop_benchmark_advice(request, comparisons, spec_map, result)
     else:
         advice, alternatives = _benchmark_advice(request, result)
+
+    full_rec = result.recommendation
     if advice:
-        result = ScoreResult(
-            score=result.score,
-            verdict=result.verdict,
-            recommendation=f"{result.recommendation} {advice}",
-            reference_price=result.reference_price,
-            delta_percent=result.delta_percent,
-            fair_price_low=result.fair_price_low,
-            fair_price_high=result.fair_price_high,
-            tier_label=tier_label,
-        )
-    elif tier_label:
-        result = ScoreResult(
-            score=result.score,
-            verdict=result.verdict,
-            recommendation=result.recommendation,
-            reference_price=result.reference_price,
-            delta_percent=result.delta_percent,
-            fair_price_low=result.fair_price_low,
-            fair_price_high=result.fair_price_high,
-            tier_label=tier_label,
-        )
+        full_rec = f"{full_rec} {advice}"
+
+    result = ScoreResult(
+        score=result.score,
+        verdict=result.verdict,
+        recommendation=full_rec,
+        reference_price=result.reference_price,
+        delta_percent=result.delta_percent,
+        fair_price_low=result.fair_price_low,
+        fair_price_high=result.fair_price_high,
+        tier_label=tier_label,
+        new_reference_price=new_ref,
+        used_reference_price=used_ref,
+        cross_market_advice=cross_advice,
+    )
+
     return result, comparisons, freshness(session, selected_source), alternatives

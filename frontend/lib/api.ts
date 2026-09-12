@@ -45,6 +45,9 @@ export type AnalyzeResult = {
   fair_price_low?: number;
   fair_price_high?: number;
   tier_label?: string | null;
+  new_reference_price?: number | null;
+  used_reference_price?: number | null;
+  cross_market_advice?: string | null;
   comparisons: Comparison[];
   alternatives?: Alternative[];
   freshness: {

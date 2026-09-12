@@ -76,3 +76,31 @@ footer { display: flex; justify-content: space-between; color: #8b968f; font-siz
 .source-facebook { background: #dbeafe; color: #1d4ed8; }
 .source-retail { background: #fef3c7; color: #b45309; }
 
+/* Dual-Market Intelligence Styles */
+.dual-market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.market-card { background: #fbfcfa; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; display: flex; flex-direction: column; gap: 3px; }
+.market-card.market-new { border-color: #bbf7d0; background: #f2fbf4; }
+.market-card.market-used { border-color: #fed7aa; background: #fffaf5; }
+.market-badge-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.market-price-val { font-size: 18px; font-weight: 800; color: var(--ink); letter-spacing: -.03em; margin: 2px 0; }
+.market-desc { font-size: 10px; color: var(--muted); }
+
+.cross-market-box { background: #f4f8f5; border: 1px solid #d2e7d7; border-radius: 12px; padding: 14px 16px; margin: 16px 0; }
+.cross-market-header { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--green); margin-bottom: 6px; font-weight: 700; }
+.cross-market-icon { font-size: 14px; }
+.cross-market-text { font-size: 12px; line-height: 1.6; color: var(--ink); margin: 0; }
+
+.comparison-filter-tabs { display: flex; gap: 6px; margin: 12px 0 6px; }
+.comp-tab { cursor: pointer; border: 1px solid var(--line); background: white; color: var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 11px; font-weight: 700; transition: all .15s ease; }
+.comp-tab:hover { border-color: var(--ink); color: var(--ink); }
+.comp-tab.active { background: var(--ink); color: white; border-color: var(--ink); }
+
+.condition-pill { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 800; font-family: 'DM Mono', monospace; text-transform: uppercase; margin-right: 4px; }
+.pill-new { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.pill-used { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+
+@media (max-width: 600px) {
+  .dual-market-grid { grid-template-columns: 1fr; }
+  .comparison-filter-tabs { flex-wrap: wrap; }
+}
+

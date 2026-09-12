@@ -108,6 +108,9 @@ class AnalyzeResponse(BaseModel):
     fair_price_low: int = 0
     fair_price_high: int = 0
     tier_label: Optional[str] = None
+    new_reference_price: Optional[int] = None
+    used_reference_price: Optional[int] = None
+    cross_market_advice: Optional[str] = None
     comparisons: list[Comparison]
     alternatives: list[Alternative] = []
     freshness: Freshness

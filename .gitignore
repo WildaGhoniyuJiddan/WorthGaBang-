@@ -261,3 +261,5 @@ skills-lock.json
 .claude/
 */.claude/
 
+
+.env*

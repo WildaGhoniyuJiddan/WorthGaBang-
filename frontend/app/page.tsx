@@ -282,8 +282,20 @@ function formatSource(source: string): { label: string; className: string } {
 
 function ResultCard({ result }: { result: AnalyzeResult }) {
   const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? result.comparisons : result.comparisons.slice(0, 5);
-  const hiddenCount = result.comparisons.length - 5;
+  const [conditionFilter, setConditionFilter] = useState<"all" | "new" | "second">("all");
+
+  const newCount = result.comparisons.filter((c) => (c.condition || "new") === "new").length;
+  const usedCount = result.comparisons.filter((c) => c.condition === "second").length;
+
+  const filteredComps = result.comparisons.filter((c) => {
+    if (conditionFilter === "all") return true;
+    if (conditionFilter === "new") return (c.condition || "new") === "new";
+    if (conditionFilter === "second") return c.condition === "second";
+    return true;
+  });
+
+  const visible = showAll ? filteredComps : filteredComps.slice(0, 5);
+  const hiddenCount = filteredComps.length - 5;
   const verdictClass = result.verdict.replace(/ /g, "-");
 
   const lowBound = Math.min(result.input_price, result.fair_price_low || result.reference_price * 0.8) * 0.9;
@@ -312,6 +324,25 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
         </div>
       </div>
 
+      {(result.new_reference_price || result.used_reference_price) && (
+        <div className="dual-market-grid">
+          <div className={`market-card ${result.new_reference_price ? "market-new" : ""}`}>
+            <div className="market-badge-label">🏷️ Pasar Baru (Retail / BNIB)</div>
+            <div className="market-price-val">
+              {result.new_reference_price ? formatRupiah(result.new_reference_price) : "Data Terbatas"}
+            </div>
+            <div className="market-desc">Median referensi harga unit baru</div>
+          </div>
+          <div className={`market-card ${result.used_reference_price ? "market-used" : ""}`}>
+            <div className="market-badge-label">📦 Pasar Bekas (Second Hand)</div>
+            <div className="market-price-val">
+              {result.used_reference_price ? formatRupiah(result.used_reference_price) : "Data Terbatas"}
+            </div>
+            <div className="market-desc">Median referensi pasar bekas</div>
+          </div>
+        </div>
+      )}
+
       <div className="spectrum-box">
         <div className="spectrum-title">
           <span>Spektrum Rentang Harga Pasar</span>
@@ -331,6 +362,16 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
       </div>
 
       <p className="recommendation">{result.recommendation}</p>
+
+      {result.cross_market_advice && (
+        <div className="cross-market-box">
+          <div className="cross-market-header">
+            <span className="cross-market-icon">💡</span>
+            <strong>Analisis Lintas Pasar (Baru vs Bekas)</strong>
+          </div>
+          <p className="cross-market-text">{result.cross_market_advice}</p>
+        </div>
+      )}
 
       {result.alternatives && result.alternatives.length > 0 && (
         <div className="alternatives-section">
@@ -367,19 +408,52 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
 
       <div className="comparisons">
         <div className="comparison-heading">
-          <h3>Pembanding yang dipakai</h3>
-          <span>{result.comparisons.length} referensi · {new Set(result.comparisons.map((c) => c.source)).size} sumber pasar</span>
+          <div>
+            <h3>Pembanding yang dipakai</h3>
+            <span>{filteredComps.length} referensi ditampilkan · {new Set(result.comparisons.map((c) => c.source)).size} sumber pasar</span>
+          </div>
         </div>
+
+        {(newCount > 0 && usedCount > 0) && (
+          <div className="comparison-filter-tabs">
+            <button
+              type="button"
+              className={`comp-tab ${conditionFilter === "all" ? "active" : ""}`}
+              onClick={() => { setConditionFilter("all"); setShowAll(false); }}
+            >
+              Semua ({result.comparisons.length})
+            </button>
+            <button
+              type="button"
+              className={`comp-tab ${conditionFilter === "new" ? "active" : ""}`}
+              onClick={() => { setConditionFilter("new"); setShowAll(false); }}
+            >
+              🏷️ Unit Baru ({newCount})
+            </button>
+            <button
+              type="button"
+              className={`comp-tab ${conditionFilter === "second" ? "active" : ""}`}
+              onClick={() => { setConditionFilter("second"); setShowAll(false); }}
+            >
+              📦 Unit Bekas ({usedCount})
+            </button>
+          </div>
+        )}
+
         {visible.map((comparison, index) => {
           const src = formatSource(comparison.source);
+          const isUsed = comparison.condition === "second";
           return (
             <a className="comparison-row" href={comparison.listing_url || undefined} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer">
               <span className="rank">0{index + 1}</span>
               <span className="comparison-title">
                 {comparison.title}
                 <small>
+                  <span className={`condition-pill ${isUsed ? "pill-used" : "pill-new"}`}>
+                    {isUsed ? "BEKAS" : "BARU"}
+                  </span>
                   <span className={`source-tag ${src.className}`}>{src.label}</span>
-                  {comparison.condition ? ` · ${comparison.condition}` : ""} · match {Math.round(comparison.similarity * 100)}%
+                  · match {Math.round(comparison.similarity * 100)}%
                 </small>
               </span>
               <strong>{formatRupiah(comparison.price)}</strong>
@@ -392,7 +466,7 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
             Lihat semua pembanding ({hiddenCount} lainnya)
           </button>
         )}
-        {showAll && result.comparisons.length > 5 && (
+        {showAll && filteredComps.length > 5 && (
           <button className="show-all-button" type="button" onClick={() => setShowAll(false)}>
             Sembunyikan
           </button>

@@ -12,6 +12,9 @@ class ScoreResult:
     fair_price_low: int = 0
     fair_price_high: int = 0
     tier_label: str | None = None
+    new_reference_price: int | None = None
+    used_reference_price: int | None = None
+    cross_market_advice: str | None = None
 
 
 def _clamp(value: float, low: float = 0, high: float = 100) -> float:
