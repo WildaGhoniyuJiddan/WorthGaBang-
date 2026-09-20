@@ -313,6 +313,22 @@ def _cpu_name(text: str) -> str | None:
     return re.sub(r"(corei|ryzen|ultra)", lambda mm: {"corei": "core i", "ryzen": "ryzen ", "ultra": "ultra "}[mm.group(1)], sig, count=1)
 
 
+def _is_external_link_allowed(source: str | None, url: str | None) -> bool:
+    """Hanya sediakan link eksternal jika berasal dari marketplace online riil (Tokopedia, FB, dll).
+
+    Data dari katalog retail Enterkomputer, API benchmark, atau referensi internal
+    tidak diberi link ke luar.
+    """
+    if not url:
+        return False
+    src = (source or "").lower()
+    if src in ("komponen_retail", "notebook_retail", "price_reference", "data", "benchmark", "enterkomputer"):
+        return False
+    if "enterkomputer" in url.lower():
+        return False
+    return True
+
+
 def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
     ctype = request.component_type or component_type_from_query(request.query)
 
@@ -396,7 +412,7 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
             title=row.raw_title,
             price=row.raw_price or 0,
             source=row.source,
-            listing_url=row.listing_url,
+            listing_url=row.listing_url if _is_external_link_allowed(row.source, row.listing_url) else None,
             similarity=similarity,
             condition=row.condition or "new",
         )
@@ -693,7 +709,7 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> tuple[list
             title=_clean_title(row.model or row.brand or "Laptop"),
             price=row.price,
             source=row.source,
-            listing_url=row.listing_url,
+            listing_url=row.listing_url if _is_external_link_allowed(row.source, row.listing_url) else None,
             similarity=similarity,
             condition=row.condition or "new",
         )

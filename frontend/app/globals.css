@@ -224,7 +224,13 @@ footer { display: flex; justify-content: space-between; color: #8b968f; font-siz
 .source-tag { display: inline-block; padding: 2px 5px; border-radius: 4px; font-size: 8px; font-weight: 700; font-family: 'DM Mono', monospace; text-transform: uppercase; margin-right: 4px; }
 .source-tokopedia { background: #dcfce7; color: #15803d; }
 .source-facebook { background: #dbeafe; color: #1d4ed8; }
-.source-retail { background: #fef3c7; color: #b45309; }
+.source-retail { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.source-data { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+a.comparison-row { cursor: pointer; transition: background-color .15s ease; }
+a.comparison-row:hover { background-color: #f6f8f6; }
+.comparison-row-static { cursor: default; }
+.comparison-row-static .arrow { color: #a6b1aa; }
 
 /* Dual-Market Intelligence Styles */
 .dual-market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }

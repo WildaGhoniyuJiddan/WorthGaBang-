@@ -520,11 +520,10 @@ function getPinPercent(price: number, minVal: number, maxVal: number): number {
   return Math.max(4, Math.min(96, Math.round(pct)));
 }
 
-function formatSource(source: string): { label: string; className: string } {
+function formatSource(source: string): { label: string; className: string; isData?: boolean } {
   if (source === "tokopedia") return { label: "Tokopedia", className: "source-tokopedia" };
   if (source === "facebook" || source === "facebook_marketplace") return { label: "FB Market", className: "source-facebook" };
-  if (source === "komponen_retail" || source === "notebook_retail") return { label: "Retail EK", className: "source-retail" };
-  return { label: "Katalog", className: "source-retail" };
+  return { label: "Data", className: "source-data", isData: true };
 }
 
 function ResultCard({ result }: { result: AnalyzeResult }) {
@@ -680,7 +679,7 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
 
       <div className="result-meta" style={{ marginTop: "16px" }}>
         <span>Data {result.freshness.label}</span>
-        <span>Sumber: {result.freshness.primary_source.replace("_", " ")}</span>
+        <span>Sumber: {formatSource(result.freshness.primary_source).label}</span>
         {result.freshness.is_stale && <span className="stale">Perlu refresh</span>}
       </div>
 
@@ -721,8 +720,20 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
         {visible.map((comparison, index) => {
           const src = formatSource(comparison.source);
           const isUsed = comparison.condition === "second";
-          return (
-            <a className="comparison-row" href={comparison.listing_url || undefined} key={`${comparison.source}-${index}`} target={comparison.listing_url ? "_blank" : undefined} rel="noreferrer">
+          const isData = Boolean(
+            src.isData ||
+            comparison.source === "komponen_retail" ||
+            comparison.source === "notebook_retail" ||
+            comparison.source === "price_reference" ||
+            comparison.source === "enterkomputer" ||
+            comparison.source === "data" ||
+            comparison.source === "benchmark" ||
+            (comparison.listing_url && comparison.listing_url.toLowerCase().includes("enterkomputer"))
+          );
+          const hasLink = Boolean(comparison.listing_url && !isData);
+
+          const rowContent = (
+            <>
               <span className="rank">0{index + 1}</span>
               <span className="comparison-title">
                 {comparison.title}
@@ -735,8 +746,31 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
                 </small>
               </span>
               <strong>{formatRupiah(comparison.price)}</strong>
-              <span className="arrow">{comparison.listing_url ? "↗" : "—"}</span>
-            </a>
+              <span className="arrow">{hasLink ? "↗" : "—"}</span>
+            </>
+          );
+
+          if (hasLink && comparison.listing_url) {
+            return (
+              <a
+                className="comparison-row"
+                href={comparison.listing_url}
+                key={`${comparison.source}-${index}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {rowContent}
+              </a>
+            );
+          }
+
+          return (
+            <div
+              className="comparison-row comparison-row-static"
+              key={`${comparison.source}-${index}`}
+            >
+              {rowContent}
+            </div>
           );
         })}
         {hiddenCount > 0 && !showAll && (
