@@ -27,7 +27,9 @@ MIN_PLAUSIBLE_PRICE = 100_000
 # Ambil grup 2 (nama toko) dari pattern: ...badge_os.png~....jpg] Tokopedia Nama Toko (https://...)
 _IMAGE_MD_RE = re.compile(r"!\\[Image [^\\]()]*\\]\\([^)]*\\)")
 _JINA_URL = "https://r.jina.ai/http://{}"
-_SHOP_RE = re.compile(r"badge_os[^\\]]*\\]\\s*([^\\]]+)(?:\\]|http)")
+# Nama toko: teks setelah gambar badge Official Store, sebelum URL.
+# Pattern: badge_os.png~....image.image) Nama Toko (https://...
+_SHOP_RE = re.compile(r"badge_os[^)]*\\)\\s+([^\\]]+)(?=\\]\\()")
 # Ambil grup 1 (jumlah terjual) dari pattern: ...rating] 5.0 19 terjual ...
 _SOLD_RE = re.compile(r"rating[^\\d]*([\\d.,]+)\\s*terjual", re.IGNORECASE)
 # Official Store badge di halaman pencarian (tidak ada di detail)
