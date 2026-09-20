@@ -24,72 +24,96 @@ from ..services.relevance import component_type_from_query, is_relevant_pc_listi
 MIN_PLAUSIBLE_PRICE = 100_000
 
 # Regex untuk parsing blok produk dari halaman pencarian Tokopedia (via Jina)
-# Ambil grup 2 (nama toko) dari pattern: ...badge_os.png~....jpg] Tokopedia Nama Toko (https://...)
-_IMAGE_MD_RE = re.compile(r"!\\[Image [^\\]()]*\\]\\([^)]*\\)")
 _JINA_URL = "https://r.jina.ai/http://{}"
-# Nama toko: teks setelah gambar badge Official Store, sebelum URL.
-# Pattern: badge_os.png~....image.image) Nama Toko (https://...
-_SHOP_RE = re.compile(r"badge_os[^)]*\\)\\s+([^\\]]+)(?=\\]\\()")
-# Ambil grup 1 (jumlah terjual) dari pattern: ...rating] 5.0 19 terjual ...
-_SOLD_RE = re.compile(r"rating[^\\d]*([\\d.,]+)\\s*terjual", re.IGNORECASE)
-# Official Store badge di halaman pencarian (tidak ada di detail)
-_OFFICIAL_BADGE_RE = re.compile(r"badge_os\\.png")
+
+# Strategi: hapus semua sintaks gambar markdown ![alt](url) dari blok, lalu
+# parse teks yang sudah bersih. Jina me-render 1 produk seperti:
+#   [![Image 1: product-image](img...) Judul Rp6.570.000 ![Image 2: rating](svg...)
+#    5.0 2 terjual ![Image 3: shop badge](...badge_os.png...) Duta Mandiri Infokom
+#    Jakarta Pusat](https://www.tokopedia.com/slug/product-url?...)
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")          # ![alt](url)
+_DETAIL_URL_RE = re.compile(r"\]\((https?://[^)\s]*tokopedia\.com/[^)\s]*)\)")
+_RP_RE = re.compile(r"Rp\s*[\d.]+")
+_TITLE_RE = re.compile(r"^(.*?)\s+Rp")
+_SOLD_RE = re.compile(r"([\d.]+)\+?\s*terjual", re.IGNORECASE)
+_RATING_RE = re.compile(r"\]\([^)]*\)\s+(\d\.\d)\s")          # rating setelah gambar svg
+# Seller (versi Official Store): teks antara gambar badge_os dan link detail.
+#   ![Image 3: shop badge](...badge_os.png...) Redcomp Jakarta Pusat](https://...
+_SELLER_RE = re.compile(r"!\[[^\]]*\]\([^)]*badge_os[^)]*\)\s*([^]\[]+?)\s*\]\(https?://")
+# Seller (non-badge): teks setelah "... terjual" sampai link detail penutup blok.
+#   ...](svg) 5.0 70+ terjual Plushy Store Tangerang](https://...
+_SELLER_AFTER_SOLD_RE = re.compile(r"terjual\s+([^]\[]+?)\s*\]\(https?://")
+_BADGE_OS_RE = re.compile(r"badge_os\.png", re.IGNORECASE)
 
 
-def _parse_blocks(body: str, query: str | None = None,
-                  component_type: str | None = None) -> list[ListingRecord]:
-    # Jina merender 1 produk Tokopedia = 1 blok markdown diawali "[![Image N: ...]".
-    records: list[ListingRecord] = []
+def _split_blocks(body: str) -> list[str]:
+    """Satu blok = satu produk, diawali baris '[![Image N: product-image]'."""
     blocks: list[str] = []
     for line in body.splitlines():
         if line.startswith("[![Image"):
             blocks.append(line)
         elif blocks:
             blocks[-1] += " " + line
-    for block in blocks:
-        price_match = re.search(r"Rp\\s*[\\d.,]+", block)
+    return blocks
+
+
+def _parse_blocks(body: str, query: str | None = None,
+                  component_type: str | None = None) -> list[ListingRecord]:
+    records: list[ListingRecord] = []
+    for raw in _split_blocks(body):
+        detail_match = _DETAIL_URL_RE.search(raw)
+        url = detail_match.group(1).rstrip(".,") if detail_match else None
+        if url and not url.startswith("https://www.tokopedia.com/"):
+            url = None  # link afiliasi/iklan, skip saja detail-nya
+
+        alt_texts = _MD_IMAGE_RE.findall(raw)
+        is_official = bool(_BADGE_OS_RE.search(raw))
+        # Seller: prefer teks setelah gambar badge_os; fallback teks setelah
+        # "... terjual" sebelum link detail penutup blok.
+        seller = None
+        seller_match = _SELLER_RE.search(raw) or _SELLER_AFTER_SOLD_RE.search(raw)
+        if seller_match:
+            seller = seller_match.group(1).strip()
+        if seller and (len(seller) > 80 or not _BADGE_OS_RE.search(raw)
+                       and ("Rp" in seller or "terjual" in seller.lower())):
+            seller = None  # match kepanjangan (blok tidak utuh) — abaikan
+        if seller in {"search", "discovery", "p", "etalase", "image"}:
+            seller = None
+
+        # Bersihkan sintaks gambar -> teks murni: "Judul Rp... 5.0 2 terjual Duta..."
+        clean = _MD_IMAGE_RE.sub(" ", raw).strip()
+        # Buang prefix link luar (biasanya judul blok sama dengan produk pertama).
+        clean = re.sub(r"^\[", "", clean)
+        price_match = _RP_RE.search(clean)
         if not price_match:
             continue
         price = parse_price(price_match.group(0))
         if not price or price < MIN_PLAUSIBLE_PRICE:
             continue
-        # Judul: teks antara penutup tag gambar pertama dan harga.
-        # Pattern: ](...) Title Rp
-        title_match = re.search(r']\\([^)]*\\)\\s+(.+?)\\s+Rp', block)
+        title_match = _TITLE_RE.search(clean)
         title = title_match.group(1).strip() if title_match else None
         if not title or len(title) < 4:
             continue
         if query and component_type and not is_relevant_pc_listing(query, title, component_type):
             continue
-        # URL detail: terakhir kali ](http...) yang muncul sebelum penutup blok.
-        url_match = re.search(r']\\((https?://[^)]+)\\)', block)
-        url = url_match.group(1).rstrip(".,") if url_match else None
-        # Nama toko: teks segera setelah gambar badge Official Store.
-        shop_match = _SHOP_RE.search(block)
-        seller = shop_match.group(2) if shop_match else None
-        if seller in {"search", "discovery", "p", "etalase"}:
-            seller = None
-        # Terjual: angka di antara gambar rating dan kata "terjual".
-        sold_match = _SOLD_RE.search(block)
         sold_count = None
-        if sold_match:
-            sold_count = _to_int(sold_match.group(1) or sold_match.group(2))
-        # Rating: angka yang sama dengan sold_count (diperoleh dari pola di atas).
         rating = None
+        sold_match = _SOLD_RE.search(clean)
         if sold_match:
+            sold_count = _to_int(sold_match.group(1))
+        rating_match = _RATING_RE.search(raw)
+        if rating_match:
             try:
-                rating = float(sold_match.group(1) or sold_match.group(2))
-            except (TypeError, ValueError):
+                rating = float(rating_match.group(1))
+            except ValueError:
                 rating = None
-        # Official Store badge: ada jika blok mengandung gambar badge_os.png.
-        is_official = bool(_OFFICIAL_BADGE_RE.search(block)) or None
         records.append(ListingRecord(
             title=title[:500],
             price=price,
             url=url,
             condition=detect_condition(title),  # fallback awal dari judul
             seller=seller,
-            is_official_store=is_official,
+            is_official_store=True if is_official else None,
             sold_count=sold_count,
             rating=rating,
         ))
@@ -226,10 +250,12 @@ class TokopediaScraper(Scraper):
                         record.condition = "second"
                     elif info.get("condition_source") == "Baru":
                         record.condition = "new"
-                    record.seller = info.get("seller")
-                    record.sold_count = info.get("sold_count")
+                    if info.get("condition_source"):
+                        record.condition_source = info["condition_source"]
+                    record.seller = info.get("seller") or record.seller
+                    record.sold_count = info.get("sold_count") or record.sold_count
                     record.review_count = info.get("review_count")
-                    record.rating = info.get("rating")
+                    record.rating = info.get("rating") or record.rating
                     record.category_name = info.get("category_name")
                     record.shop_active = info.get("shop_active")
 
