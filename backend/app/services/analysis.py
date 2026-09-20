@@ -314,13 +314,19 @@ def _cpu_name(text: str) -> str | None:
 
 
 def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Comparison]:
-    # ponytail: ambil per-sumber (bukan satu jendela global) — kalau satu jendela,
-    # sumber yg discrape paling akhir mendorong sumber lain keluar dari limit.
-    # Katalog retail EK pakai category = jenis komponen (vga/processor/...),
-    # marketplace pakai "pc". Kalau katalog >20k listing, pindahkan filter ke SQL.
+    ctype = request.component_type or component_type_from_query(request.query)
+
+    retail_cats = {
+        "gpu": ("vga",),
+        "cpu": ("processor",),
+        "motherboard": ("motherboard",),
+        "ram": ("ram",),
+        "storage": ("ssd", "harddisk"),
+    }.get(ctype, ("vga", "processor", "motherboard", "ram", "ssd", "harddisk"))
+
     rows = []
     for sources, cats in (
-        (("komponen_retail",), ("vga", "processor", "motherboard", "ram", "ssd", "harddisk")),
+        (("komponen_retail",), retail_cats),
         (("tokopedia",), ("pc",)),
         (("facebook", "facebook_marketplace"), ("pc",)),
     ):
@@ -337,16 +343,16 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
     scored = [
         (max(0.05, _similarity(request.query, row.raw_title) - _age_penalty(row.scraped_at, now)), row)
         for row in rows
-        if _is_relevant_pc_listing(request.query, row.raw_title, request.component_type)
+        if _is_relevant_pc_listing(request.query, row.raw_title, ctype)
     ]
     # Hard gate identitas: judul harus memuat token model persis dari query
     # ("RTX 4060 8GB" gak boleh dibandingkan dengan "RTX 4060 Ti" — produk
     # beda, harga jauh). Ini lebih penting daripada skor kemiripan.
-    required = _model_tokens(request.query, request.component_type)
+    required = _model_tokens(request.query, ctype)
     if required:
         scored = [
             (score, row) for score, row in scored
-            if _model_tokens(row.raw_title, request.component_type) == required
+            if _model_tokens(row.raw_title, ctype) == required
         ]
     # butuh kemiripan token tinggi (>=0.75) supaya "RX 6600" tidak membandingkan
     # diri dengan PC build yang iseng mention RX 6600 atau laptop seri lain
@@ -434,7 +440,7 @@ def resolve_bundle_item_prices(session: Session, query: str, component_type: str
             for r in direct_rows:
                 if r.raw_price and r.raw_price > 0:
                     rt = (r.raw_title or "").lower()
-                    if all(t in rt for t in tokens):
+                    if all(t in rt for t in tokens) and is_relevant_pc_listing(query, r.raw_title, ctype):
                         if r.condition == "second":
                             used_prices.append(r.raw_price)
                         else:
@@ -555,6 +561,8 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> tuple[list
 
     for row in rows:
         title = f"{row.brand or ''} {row.model or ''} {row.cpu or ''} {row.gpu or ''}"
+        if not _is_relevant_pc_listing(request.query, title, "laptop"):
+            continue
         got_gpu = _gpu_sig(title)
         got_cpu = _cpu_sig(title)
 

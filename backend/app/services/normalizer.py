@@ -57,17 +57,44 @@ def _benchmark(model: str) -> int:
 
 def normalize_laptop(raw: RawListing) -> LaptopUnit:
     text = f"{raw.raw_title} {raw.raw_spec_text or ''}"
-    cpu_match = re.search(r"((?:intel\s+)?core\s+i[3579]\s*[- ]?\d{4,5}[a-z]*|ryzen\s*[3579]\s*\d{4,5}[a-z]*)", text, re.IGNORECASE)
+    cpu_match = re.search(
+        r"((?:intel\s+)?(?:core\s*(?:ultra\s*)?[3579]|ultra\s*[579]|core\s+i[3579]|i[3579])\s*[- ]?\s*\d{3,5}[a-z]*|ryzen\s*(?:ai\s*)?[3579]\s*[- ]?\s*(?:\d{4}[a-z]*|\d{3}\b))",
+        text,
+        re.IGNORECASE,
+    )
     gpu_match = re.search(r"((?:rtx|gtx|rx)\s*\d{3,4}(?:\s*ti|\s*super)?)", text, re.IGNORECASE)
     screen_match = re.search(r"(\d{2}(?:\.\d)?)\s*(?:inch|inci|\")", text, re.IGNORECASE)
+
+    # Shorthand slash specs like 8GB/16/512GB or 16/512GB
+    ram_val = None
+    storage_val = None
+    m_slash3 = re.search(r"\b\d{1,2}\s*gb\s*/\s*(\d{1,2})\s*(?:gb)?\s*/\s*(\d{3,4})\s*(?:gb)?\b", text, re.IGNORECASE)
+    if m_slash3:
+        ram_val = int(m_slash3.group(1))
+        storage_val = int(m_slash3.group(2))
+    else:
+        m_slash2 = re.search(r"\b(\d{1,2})\s*(?:gb)?\s*/\s*(\d{3,4})\s*(?:gb)?\b", text, re.IGNORECASE)
+        if m_slash2:
+            ram_val = int(m_slash2.group(1))
+            storage_val = int(m_slash2.group(2))
+
+    if ram_val is None:
+        ram_val = extract_gb(text, r"(\d{1,3})\s*gb\s*(?:ram|ddr|memory)") or extract_gb(text, r"(\d{1,3})\s*gb")
+    if storage_val is None:
+        tb_m = re.search(r"(\d+)\s*tb\b", text, re.IGNORECASE)
+        if tb_m:
+            storage_val = int(tb_m.group(1)) * 1000
+        else:
+            storage_val = extract_gb(text, r"(\d{2,5})\s*gb\s*(?:ssd|nvme|hdd|storage)") or extract_gb(text, r"(?:ssd|nvme|hdd)\s*(\d{2,5})\s*gb")
+
     return LaptopUnit(
         raw_listing_id=raw.id,
         brand=detect_brand(text),
         model=clean_text(raw.raw_title)[:255],
         cpu=clean_text(cpu_match.group(1)) if cpu_match else None,
         gpu=clean_text(gpu_match.group(1)) if gpu_match else None,
-        ram_gb=extract_gb(text, r"(\d{1,3})\s*gb\s*(?:ram|ddr|memory)?") or extract_gb(text, r"(\d{1,3})\s*gb"),
-        storage_gb=extract_gb(text, r"(\d{2,5})\s*gb\s*(?:ssd|nvme|hdd|storage)") or extract_gb(text, r"(\d+)\s*tb\s*(?:ssd|nvme|hdd)") and int(extract_gb(text, r"(\d+)\s*tb") or 0) * 1000,
+        ram_gb=ram_val,
+        storage_gb=storage_val,
         screen_size=float(screen_match.group(1)) if screen_match else None,
         price=raw.raw_price or 0,
         condition=raw.condition or ("second" if "second" in text.lower() or "bekas" in text.lower() else "new"),

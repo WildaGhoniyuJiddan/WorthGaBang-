@@ -78,15 +78,9 @@ def clean_text(value: object) -> str:
 
 
 def detect_category(title: str, spec_text: str = "") -> str:
-    text = f"{title} {spec_text}".lower()
-    laptop_terms = ("laptop", "notebook", "macbook", "vivobook", "ideapad", "thinkpad", "zenbook", "rog strix")
-    if any(term in text for term in laptop_terms):
-        return "laptop"
-    # Seri gaming populer tanpa kata "laptop" di judul toko ("Lenovo LOQ 15",
-    # "MSI Katana A15") tetap unit laptop, bukan komponen PC.
-    from .relevance import _LAPTOP_SERIES_RE
+    from .relevance import is_laptop_listing
 
-    return "laptop" if _LAPTOP_SERIES_RE.search(text) else "pc"
+    return "laptop" if is_laptop_listing(title, spec_text) else "pc"
 
 
 def detect_brand(text: str) -> Optional[str]:

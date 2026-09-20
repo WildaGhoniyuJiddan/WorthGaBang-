@@ -41,6 +41,44 @@ buildcores-open-db/
 pc-part-dataset/
 
 # ==============================================================================
+# TESTS & TEST SUITES (DO NOT UPLOAD TO GITHUB)
+# ==============================================================================
+tests/
+*/tests/
+**/tests/
+test/
+*/test/
+**/test/
+test_*.py
+*_test.py
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+backend/tests/
+
+# ==============================================================================
+# PRODUCT REQUIREMENTS & SPECIFICATIONS (DO NOT UPLOAD TO GITHUB)
+# ==============================================================================
+PRD.md
+*PRD*.md
+*/PRD.md
+**/PRD.md
+**/PRD*.md
+worl-tools/PRD.md
+
+# ==============================================================================
+# PERSONAL DEPLOYMENT TRIGGERS, PRIVATE GUIDES & BACKUPS
+# ==============================================================================
+deploy.txt
+rebuild.txt
+redeploy.txt
+trigger.txt
+DEPLOYMENT_GUIDE.md
+*.backup
+*.bak
+
+# ==============================================================================
 # INTERNAL RESEARCH, SCRATCH & PROBE SCRIPTS
 # ==============================================================================
 # Research & Internal Notes
@@ -55,7 +93,7 @@ test_worl_scraper.js
 worl-backend.py
 worl-scraper.js
 
-# Backend scratch & probe debug scripts (keeps backend/tests/ pytest suite tracked)
+# Backend scratch & probe debug scripts
 backend/scripts/
 backend/test_*.py
 backend/decode_token.py
