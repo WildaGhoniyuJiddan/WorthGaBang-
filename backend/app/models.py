@@ -24,9 +24,23 @@ class RawListing(Base):
     raw_title: Mapped[str] = mapped_column(Text)
     raw_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     raw_spec_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Deskripsi produk. Wajib diisi kalau sumbernya menyediakan deskripsi —
+    # dipakai untuk mendeteksi kondisi asli ("like new", "ex mining").
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     listing_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     listing_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     condition: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # Nama toko/penjual. Dipakai untuk menilai toko Tokopedia masih aktif.
+    seller: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # True kalau Tokopedia menandai toko sebagai Official Store / distributor.
+    # Ini sinyal utama pemisah "tokopedia_baru" vs "tokopedia_bekas".
+    is_official_store: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # Jumlah unit terjual — dipakai untuk deteksi toko tidak aktif.
+    sold_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rating: Mapped[Optional[float]] = mapped_column(nullable=True)
+    # Nilai kondisi mentah dari Tokopedia ("Bekas"/"Baru"), sumber paling
+    # tepercaya karena diisi langsung oleh penjual di halaman produk.
+    condition_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
     laptop_unit: Mapped[Optional["LaptopUnit"]] = relationship(back_populates="raw_listing", uselist=False)

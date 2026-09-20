@@ -6,7 +6,12 @@ from .config import get_settings
 from .db import SessionLocal
 from .models import ScrapeRun
 from .scrapers import FacebookMarketplaceScraper, Scraper, ShopeeScraper, TokopediaScraper
-from .services.ingestion import ListingInput, ingest_listings
+from .services.ingestion import (
+    IngestStats,
+    ListingInput,
+    ingest_listings,
+    listing_input_from_record,
+)
 
 
 def scraper_for(source: str) -> Scraper:
@@ -48,23 +53,18 @@ def run_source(
     db.commit()
     try:
         records = (scraper or scraper_for(source)).fetch(query)
+        stats = IngestStats()
         inserted = ingest_listings(
             db,
             source,
-            [
-                ListingInput(
-                    title=record.title,
-                    price=record.price,
-                    url=record.url,
-                    spec_text=record.spec_text,
-                    category=record.category,
-                    condition=record.condition,
-                )
-                for record in records
-            ],
+            [listing_input_from_record(record) for record in records],
+            stats=stats,
         )
         run.status = "success"
         run.item_count = inserted
+        # Catat berapa listing ex-mining yang dibuang supaya bisa diaudit.
+        if stats.skipped_ex_mining:
+            run.error_message = f"dibuang ex-mining: {stats.skipped_ex_mining}"
     except Exception as exc:
         db.rollback()
         run = db.merge(run)
@@ -169,13 +169,7 @@ def _ingest_records(source: str, query: str, records: list) -> int:
         inserted = ingest_listings(
             db,
             source,
-            [
-                ListingInput(
-                    title=r.title, price=r.price, url=r.url,
-                    spec_text=r.spec_text, category=r.category, condition=r.condition,
-                )
-                for r in records
-            ],
+            [listing_input_from_record(r) for r in records],
         )
         return inserted
     finally:
