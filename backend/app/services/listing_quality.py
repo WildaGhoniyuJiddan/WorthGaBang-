@@ -57,6 +57,11 @@ EX_MINING_PATTERNS: tuple[str, ...] = (
     r"pemakaian[\s\-_.]*mining",
     r"dipakai[\s\-_.]*mining",
     r"untuk[\s\-_.]*mining",
+    r"buat[\s\-_.]*mining",
+    r"mining[\s\-_.]*edition",
+    r"mining[\s\-_.]*gpu",
+    r"mining[\s\-_.]*graphic",
+    r"\bcmp[\s\-_]*\d{2,3}hx\b",
     r"24[\s\-_.]*jam[\s\-_.]*(nonstop|non[\s\-_.]*stop)[\s\-_.]*mining",
 )
 
