@@ -21,6 +21,8 @@ export default function SuggestInput({ value, onChange, onSelectPrice, section, 
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const suggestionCache = useRef<Map<string, Suggestion[]>>(new Map());
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {

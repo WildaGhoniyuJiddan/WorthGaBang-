@@ -1,0 +1,5 @@
+# Local scratch directory for batch scraping (not in git)
+backend/app/local_scratch/
+
+# Except this keep file so directory exists
+!backend/app/local_scratch/.gitkeep

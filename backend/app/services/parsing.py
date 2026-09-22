@@ -73,6 +73,13 @@ def stable_listing_hash(source: str, title: str, price: Optional[int], url: Opti
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
+def strip_query_prefix(text: str) -> str:
+    """Bersihkan prefix keyword query seperti 'Arc B580 — ' atau '[query] \ufffc ' dari judul."""
+    raw = str(text or "").strip()
+    cleaned = re.sub(r"^[^\u2014\ufffc]+[\u2014\ufffc]\s*", "", raw).strip()
+    return cleaned or raw
+
+
 def clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 

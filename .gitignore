@@ -25,16 +25,7 @@ service-account*.json
 !.env.example
 !.env.*.example
 
-# ==============================================================================
-# DATA DUMPS, RAW DATASETS & INTERNAL ARTIFACTS
-# ==============================================================================
-reddit_*.json
-tokped_*.json
-*.docx
-*.zip
-*.csv
-chart_worth_it.png
-!worl-extension/manifest.json
+# ==============================================================================\n# DATA DUMPS, RAW DATASETS & INTERNAL ARTIFACTS\n# ==============================================================================\nreddit_*.json\ntokped_*.json\n*.docx\n*.zip\n*.csv\nchart_worth_it.png\n!worl-extension/manifest.json\n\n# Local scratch for batch scraping (reduced egress)\nbackend/app/local_scratch/scraped_raw/\nbackend/app/local_scratch/processed_batch/\n!backend/app/local_scratch/.gitkeep
 
 # Large external dataset directories & submodules
 buildcores-open-db/

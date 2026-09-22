@@ -1,0 +1,70 @@
+{
+  "source": "Reddit (arctic-shift API, real data)",
+  "window_days": 7,
+  "subreddits": [
+    "buildapc",
+    "PcBuild",
+    "GamingLaptops",
+    "pcmasterrace",
+    "laptops",
+    "SuggestALaptop"
+  ],
+  "total_worth_posts_7d": 218,
+  "fresh_under_24h": 28,
+  "older_than_24h": 190,
+  "answered_has_comments": 166,
+  "unanswered_zero_comments": 24,
+  "pct_answered": 87.4,
+  "pct_unanswered": 12.6,
+  "sample_unanswered": [
+    {
+      "subreddit": "buildapc",
+      "title": "Is buying a used pc (AMD Ryzen 7 7800X3D, RTX 5070 Ti etc.) for 2300$ worth it?",
+      "age_hours": 30.3,
+      "url": "https://reddit.com/r/buildapc/comments/1vtueoo/is_buying_a_used_pc_amd_ryzen_7_7800x3d_rtx_5070/"
+    },
+    {
+      "subreddit": "buildapc",
+      "title": "Is ASUS PRIME A620M-K a good choice for an RX 9060 XT 16GB build? And is DDR4 still worth considering?",
+      "age_hours": 40.3,
+      "url": "https://reddit.com/r/buildapc/comments/1vtf4rm/is_asus_prime_a620mk_a_good_choice_for_an_rx_9060/"
+    },
+    {
+      "subreddit": "buildapc",
+      "title": "Moving from UK to India soon. Thinking of building my first good PC. How does this compare and are the premium prices worth it?",
+      "age_hours": 106.4,
+      "url": "https://reddit.com/r/buildapc/comments/1vqw9p9/moving_from_uk_to_india_soon_thinking_of_building/"
+    },
+    {
+      "subreddit": "buildapc",
+      "title": "Is upgrading from an HDD to a SATA SSD still worth it in 2026?",
+      "age_hours": 112.7,
+      "url": "https://reddit.com/r/buildapc/comments/1vqnkrv/is_upgrading_from_an_hdd_to_a_sata_ssd_still/"
+    },
+    {
+      "subreddit": "buildapc",
+      "title": "[Build Help] RX 9060 XT ($580) vs RTX 5060 Ti ($700) for 1440p Gaming - Is the $120 price difference worth it?",
+      "age_hours": 152.5,
+      "url": "https://reddit.com/r/buildapc/comments/1vp9dvm/build_help_rx_9060_xt_580_vs_rtx_5060_ti_700_for/"
+    },
+    {
+      "subreddit": "pcmasterrace",
+      "title": "Thinking of selling my RTX 4080 laptop for a 7900 XTX desktop \u2014 mainly local AI + some gaming. Worth it?",
+      "age_hours": 24.7,
+      "url": "https://reddit.com/r/pcmasterrace/comments/1vu2j5h/thinking_of_selling_my_rtx_4080_laptop_for_a_7900/"
+    },
+    {
+      "subreddit": "pcmasterrace",
+      "title": "Thinking of selling my RTX 4080 laptop for a 7900 XTX desktop \u2014 mainly local AI + some gaming. Worth it?",
+      "age_hours": 24.8,
+      "url": "https://reddit.com/r/pcmasterrace/comments/1vu2hgc/thinking_of_selling_my_rtx_4080_laptop_for_a_7900/"
+    },
+    {
+      "subreddit": "pcmasterrace",
+      "title": "Which is worth getting?",
+      "age_hours": 26.6,
+      "url": "https://reddit.com/r/pcmasterrace/comments/1vu01sx/which_is_worth_getting/"
+    }
+  ],
+  "collected_at": "2026-08-22T02:20:48.547952+00:00"
+}

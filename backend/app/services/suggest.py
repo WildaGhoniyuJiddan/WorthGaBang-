@@ -146,7 +146,7 @@ def _market_prices(db: Session, section: str) -> dict[str, list[int]]:
     rows = db.execute(
         select(RawListing.raw_title, RawListing.raw_price)
         .where(RawListing.category == "pc", RawListing.raw_price.is_not(None), RawListing.raw_price > 50_000)
-        .order_by(desc(RawListing.scraped_at)).limit(4000)
+        .order_by(desc(RawListing.scraped_at)).limit(1200)
     ).all()
     for title, price in rows:
         if _NOT_STANDALONE_RE.search(title or ""):
@@ -301,7 +301,7 @@ def suggest_components(db: Session, section: str, q: str, limit: int = 8,
                 RawListing.raw_price.is_not(None),
                 RawListing.raw_price > 50_000,
             )
-            .order_by(desc(RawListing.scraped_at)).limit(2000)
+            .order_by(desc(RawListing.scraped_at)).limit(600)
         ).all()
         for title, price in rows:
             if not is_relevant_pc_listing(title, title, section):

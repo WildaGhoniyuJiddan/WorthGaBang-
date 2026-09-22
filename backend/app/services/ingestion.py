@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..models import RawListing
 from .listing_quality import assess_listing
 from .normalizer import normalize_listing
-from .parsing import clean_text, detect_category, detect_condition, parse_price, stable_listing_hash
+from .parsing import clean_text, detect_category, detect_condition, parse_price, stable_listing_hash, strip_query_prefix
 
 
 @dataclass
@@ -86,7 +86,7 @@ def ingest_listings(
     """
     counters = stats if stats is not None else IngestStats()
     for item in listings:
-        title = clean_text(item.title)
+        title = strip_query_prefix(clean_text(item.title))
         if not title:
             counters.skipped_other += 1
             continue

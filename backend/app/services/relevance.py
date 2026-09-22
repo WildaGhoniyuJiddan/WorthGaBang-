@@ -91,7 +91,7 @@ _EXCLUSIVE_LAPTOP_SERIES = re.compile(
     r"ideapad(?:\s*(?:slim|flex|gaming|pro)?\s*\d{1,2}[a-z]*)?|"
     r"yoga(?:\s*(?:slim|pro|book)?\s*\d{1,2}[a-z]*)?|thinkpad(?:\s*[a-z]\d{2,4}[a-z]*)?|thinkbook|"
     # Acer
-    r"nitro(?:\s*v)?(?:\s*\d{1,2}[a-z]*)?|swift(?:\s*(?:go|edge|x|\d{1,2}))?|"
+    r"acer\s*nitro(?:\s*v)?(?:\s*\d{1,2}[a-z]*)?|nitro\s*(?:v\s*\d{1,2}|[57]\b)|swift(?:\s*(?:go|edge|x|\d{1,2}))?|"
     r"aspire(?:\s*(?:lite|vero|pro|\d{1,2}))?|travelmate|spin\s*\d|"
     # HP
     r"victus(?:\s*\d{1,2})?|omen(?:\s*(?:transcend|\d{1,2}))?|"
@@ -199,6 +199,9 @@ def is_laptop_listing(title: str, spec_text: str = "") -> bool:
     text = f"{title} {spec_text}".lower()
     if any(word in text for word in _ACCESSORY_WORDS):
         return False
+    # Brand kartu grafis lepas yang tidak pernah memproduksi laptop
+    if "sapphire" in text:
+        return False
     if _LAPTOP_GENERIC_WORDS.search(text):
         return True
     if _EXCLUSIVE_LAPTOP_SERIES.search(text):
@@ -225,7 +228,7 @@ def component_type_from_query(query: str) -> str | None:
     text = (query or "").lower()
     if is_laptop_listing(text):
         return "laptop"
-    if re.search(r"\b(?:rtx|gtx|rx)\s*\d{3,4}", text):
+    if re.search(r"\b(?:rtx|gtx|rx|arc)\s*(?:[ab]?\d{3,4})", text):
         return "gpu"
     if re.search(r"\b(?:ryzen\s*(?:ai\s*)?[3579]|core\s*(?:ultra\s*)?[3579]|ultra\s*[579]|intel\s*core|i[3579])\s*[- ]?\d{3,5}", text):
         return "cpu"
@@ -248,7 +251,7 @@ def _component_signature(value: str, component_type: str | None) -> tuple[str, s
     text = (value or "").lower()
     if component_type == "gpu":
         # Suffix Ti/Super/XT = produk BEDA ("RTX 4060" != "RTX 4060 Ti", harga bisa 2x)
-        match = re.search(r"\b(rtx|gtx|rx)\s*(\d{3,4})\s*(ti|super|xt)?\b", text)
+        match = re.search(r"\b(rtx|gtx|rx|arc)\s*([ab]?\d{3,4})\s*(ti|super|xt)?\b", text)
         if match:
             return "gpu", f"{match.group(1)}{match.group(2)}{match.group(3) or ''}"
     if component_type == "cpu":
@@ -309,6 +312,12 @@ def is_relevant_pc_listing(query: str, title: str, component_type: str | None = 
 
     # Filter khusus GPU lepas
     if resolved_type == "gpu":
+        # Konflik kapasitas VRAM jika query eksplisit menyebutkan VRAM
+        query_vram = re.search(r"\b(\d{1,2})\s*gb\b", query_text)
+        title_vram = re.search(r"\b(\d{1,2})\s*gb\b", title_text)
+        if query_vram and title_vram and query_vram.group(1) != title_vram.group(1):
+            return False
+
         # Kartu grafis lepas tidak pernah mencantumkan prosesor CPU
         if _CPU_MARKER_RE.search(title_text):
             return False
@@ -322,7 +331,7 @@ def is_relevant_pc_listing(query: str, title: str, component_type: str | None = 
         if _BUNDLED_OS_RE.search(title_text):
             return False
         # Multi-chipset GPU dalam 1 judul (mis. "RTX5060 / RTX5050") gugur
-        matches = re.findall(r"\b(?:rtx|gtx|rx)\s*(\d{3,4})\s*(ti|super|xt)?\b", title_text)
+        matches = re.findall(r"\b(?:rtx|gtx|rx|arc)\s*([ab]?\d{3,4})\s*(ti|super|xt)?\b", title_text)
         if matches:
             distinct_models = {f"{m[0]}{(m[1] or '')}" for m in matches}
             if len(distinct_models) > 1:

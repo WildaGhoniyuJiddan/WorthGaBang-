@@ -90,12 +90,17 @@ class FacebookMarketplaceScraper(Scraper):
         records: list[ListingRecord] = []
         seen: set[str] = set()
         for row in _iter_csv_rows(paths, query):
-            title = (row.get("name") or "").strip()
+            raw_title = (row.get("name") or "").strip()
+            description = (row.get("description") or "").strip() or None
+            # Jika description bersih dan lebih kaya/murni, prioritaskan description
+            if description and not re.search(r"^[^\u2014\ufffc]+[\u2014\ufffc]\s*", description) and len(description) >= 5:
+                title = description
+            else:
+                title = re.sub(r"^[^\u2014\ufffc]+[\u2014\ufffc]\s*", "", raw_title).strip() or raw_title
             if not title:
                 continue
             price = _parse_price_cell(row)
             url = (row.get("url") or "").strip() or None
-            description = (row.get("description") or "").strip() or None
             seller = (row.get("author") or "").strip() or None
             key = (url or f"{title}|{price}").lower()
             if key in seen:

@@ -540,8 +540,9 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
     return true;
   });
 
-  const visible = showAll ? filteredComps : filteredComps.slice(0, 5);
-  const hiddenCount = filteredComps.length - 5;
+  const INITIAL_LIMIT = 10;
+  const visible = showAll ? filteredComps : filteredComps.slice(0, INITIAL_LIMIT);
+  const hiddenCount = filteredComps.length - INITIAL_LIMIT;
   const verdictClass = result.verdict.replace(/ /g, "-");
 
   const lowBound = Math.min(result.input_price, result.fair_price_low || result.reference_price * 0.8) * 0.9;
@@ -734,7 +735,7 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
 
           const rowContent = (
             <>
-              <span className="rank">0{index + 1}</span>
+              <span className="rank">{String(index + 1).padStart(2, "0")}</span>
               <span className="comparison-title">
                 {comparison.title}
                 <small>
@@ -778,7 +779,7 @@ function ResultCard({ result }: { result: AnalyzeResult }) {
             Lihat semua pembanding ({hiddenCount} lainnya)
           </button>
         )}
-        {showAll && filteredComps.length > 5 && (
+        {showAll && filteredComps.length > INITIAL_LIMIT && (
           <button className="show-all-button" type="button" onClick={() => setShowAll(false)}>
             Sembunyikan
           </button>

@@ -68,7 +68,7 @@ def _model_tokens(value: str, component_type: str | None) -> set[str]:
     wajib memuat semua token ini, bukan sekadar mirip."""
     text = (value or "").lower()
     tokens: list[str] = []
-    m = re.search(r"\b(rtx|gtx|rx)\s*(\d{3,4})\s*(ti|super|xt)?\b", text)
+    m = re.search(r"\b(rtx|gtx|rx|arc)\s*([ab]?\d{3,4})\s*(ti|super|xt)?\b", text)
     if m:
         tokens += [m.group(1), m.group(2)] + ([m.group(3)] if m.group(3) else [])
         return set(tokens)
@@ -94,6 +94,19 @@ def _model_tokens(value: str, component_type: str | None) -> set[str]:
         chipset = re.search(r"\b([abxzi]\d{3})[a-z]{0,2}\b", text)
         return {chipset.group(1)} if chipset else set()
     return set()
+
+
+def _matches_model_tokens(row_tokens: set[str], required_tokens: set[str]) -> bool:
+    """Periksa kesesuaian token model. Jika query menyebut kapasitas (misal 4gb),
+    listing pembanding wajib mencantumkan kapasitas yang sama persis.
+    Jika query tidak menyebut kapasitas, varian kapasitas apa pun diterima."""
+    if not required_tokens:
+        return True
+    req_vram = {t for t in required_tokens if re.match(r"^\d{1,2}gb$", t)}
+    if req_vram:
+        return row_tokens == required_tokens
+    row_core = {t for t in row_tokens if not re.match(r"^\d{1,2}gb$", t)}
+    return row_core == required_tokens
 
 
 # ponytail: harga BARU referensi (USD street dari PCPartPicker dataset) -> IDR.
@@ -340,83 +353,181 @@ def _pc_comparisons(session: Session, request: AnalyzeRequest) -> list[Compariso
         "storage": ("ssd", "harddisk"),
     }.get(ctype, ("vga", "processor", "motherboard", "ram", "ssd", "harddisk"))
 
-    rows = []
-    for sources, cats in (
-        (("komponen_retail",), retail_cats),
-        (("tokopedia",), ("pc",)),
-        (("facebook", "facebook_marketplace"), ("pc",)),
-    ):
-        rows += session.scalars(
-            select(RawListing).where(
-                RawListing.category.in_(cats),
-                RawListing.raw_price >= 50_000,
-                RawListing.raw_price <= 150_000_000,
-                (RawListing.condition != "issue") | (RawListing.condition.is_(None)),
-                RawListing.source.in_(sources),
-            ).order_by(desc(RawListing.scraped_at)).limit(6000)
-        ).all()
+    # Cari token angka/model utama dari query user (misal '580', '4060', '12400', '5600')
+    m_num = re.search(r"\b(\d{3,5})\b", request.query)
+    model_num = m_num.group(1) if m_num else None
+
+    # Bangun filter SQL yang efisien melintasi seluruh database
+    all_cats = ("pc", "vga", "processor", "motherboard", "ram", "ssd", "harddisk", "laptop")
+    all_sources = ("komponen_retail", "tokopedia", "facebook", "facebook_marketplace")
+
+    base_query = select(RawListing).where(
+        RawListing.raw_price >= 50_000,
+        RawListing.raw_price <= 150_000_000,
+        (RawListing.condition != "issue") | (RawListing.condition.is_(None)),
+        RawListing.source.in_(all_sources),
+        RawListing.category.in_(all_cats),
+    )
+
+    if model_num:
+        base_query = base_query.where(
+            or_(
+                RawListing.raw_title.ilike(f"%{model_num}%"),
+                RawListing.raw_spec_text.ilike(f"%{model_num}%"),
+            )
+        )
+    elif ctype in ("ram", "storage"):
+        canon = _canonical_key(request.query, ctype)
+        if canon:
+            toks = [t for t in canon.lower().split() if len(t) >= 2]
+            for t in toks:
+                base_query = base_query.where(RawListing.raw_title.ilike(f"%{t}%"))
+
+    rows = session.scalars(base_query.order_by(desc(RawListing.scraped_at)).limit(3000)).all()
+
+    # Jika pencarian targeted sedikit atau tidak ada token angka, fallback ke limit 1000 per sumber
+    if len(rows) < 10 and not model_num:
+        fallback_rows = []
+        for sources, cats in (
+            (("komponen_retail",), retail_cats),
+            (("tokopedia",), ("pc",)),
+            (("facebook", "facebook_marketplace"), ("pc",)),
+        ):
+            fallback_rows += session.scalars(
+                select(RawListing).where(
+                    RawListing.category.in_(cats),
+                    RawListing.raw_price >= 50_000,
+                    RawListing.raw_price <= 150_000_000,
+                    (RawListing.condition != "issue") | (RawListing.condition.is_(None)),
+                    RawListing.source.in_(sources),
+                ).order_by(desc(RawListing.scraped_at)).limit(1000)
+            ).all()
+        rows = list({r.id: r for r in (list(rows) + fallback_rows)}.values())
+
     now = datetime.now(timezone.utc)
-    scored = [
-        (max(0.05, _similarity(request.query, row.raw_title) - _age_penalty(row.scraped_at, now)), row)
-        for row in rows
-        if _is_relevant_pc_listing(request.query, row.raw_title, ctype)
-    ]
-    # Hard gate identitas: judul harus memuat token model persis dari query
-    # ("RTX 4060 8GB" gak boleh dibandingkan dengan "RTX 4060 Ti" — produk
-    # beda, harga jauh). Ini lebih penting daripada skor kemiripan.
     required = _model_tokens(request.query, ctype)
-    if required:
-        scored = [
-            (score, row) for score, row in scored
-            if _model_tokens(row.raw_title, ctype) == required
-        ]
-    # butuh kemiripan token tinggi (>=0.75) supaya "RX 6600" tidak membandingkan
-    # diri dengan PC build yang iseng mention RX 6600 atau laptop seri lain
-    matching = [item for item in scored if item[0] >= 0.75]
-    if not matching:
-        return []
 
-    if request.condition and request.condition != "any":
-        wanted = request.condition
-        matching = [item for item in matching if (item[1].condition or "new") == wanted]
-        if not matching:
-            return []
+    # Scoring & filtering
+    scored_exact = []
+    scored_family = []
 
-    # outlier guard: median robust, tapi IQR ekstrem tetap bisa narik anchor;
-    # buang harga di luar [Q1-1.5xIQR, Q3+1.5xIQR] sebelum pilih pembanding.
-    matching.sort(key=lambda item: (item[0], item[1].scraped_at), reverse=True)
-    top = matching[:40]
-    prices = sorted(item[1].raw_price or 0 for item in top)
-    if len(prices) >= 4:
-        q1 = prices[max(0, len(prices) // 4)]
-        q3 = prices[min(len(prices) - 1, (3 * len(prices)) // 4)]
+    for row in rows:
+        clean_t = _clean_title(row.raw_title)
+        if not _is_relevant_pc_listing(request.query, clean_t, ctype):
+            continue
+        sim = max(0.05, _similarity(request.query, clean_t) - _age_penalty(row.scraped_at, now))
+        row_toks = _model_tokens(clean_t, ctype)
+
+        if _matches_model_tokens(row_toks, required):
+            scored_exact.append((sim, row, clean_t))
+        elif required and (row_toks - {t for t in row_toks if re.match(r"^\d{1,2}gb$", t)}) == (required - {t for t in required if re.match(r"^\d{1,2}gb$", t)}):
+            # Model sekeluarga tapi kapasitas VRAM beda (misal query 4GB dapat 8GB)
+            scored_family.append((max(0.05, sim * 0.88), row, clean_t))
+
+    # Filter kemiripan >= 0.75 untuk exact
+    matching_exact = [item for item in scored_exact if item[0] >= 0.75]
+    matching_family = [item for item in scored_family if item[0] >= 0.65]
+
+    # Pisahkan per kondisi
+    wanted_cond = request.condition
+    if wanted_cond and wanted_cond != "any":
+        exact_cond = [item for item in matching_exact if (item[1].condition or "new") == wanted_cond]
+        family_cond = [item for item in matching_family if (item[1].condition or "new") == wanted_cond]
+        other_cond = [item for item in matching_exact if (item[1].condition or "new") != wanted_cond]
+    else:
+        exact_cond = matching_exact
+        family_cond = matching_family
+        other_cond = []
+
+    # Dedup berdasarkan kesamaan judul dan harga
+    def _dedup_items(items):
+        seen = set()
+        deduped = []
+        for sim, r, title in items:
+            key = (r.source, title[:60].lower(), r.raw_price)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append((sim, r, title))
+        return deduped
+
+    exact_cond = _dedup_items(exact_cond)
+    family_cond = _dedup_items(family_cond)
+    other_cond = _dedup_items(other_cond)
+
+    # Outlier filter pada exact_cond
+    def _filter_outliers(items):
+        if len(items) < 4:
+            return items
+        prices = sorted(it[1].raw_price or 0 for it in items)
+        q1 = prices[len(prices) // 4]
+        q3 = prices[(3 * len(prices)) // 4]
         iqr = q3 - q1
         lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-        inliers = [item for item in top if lo <= (item[1].raw_price or 0) <= hi]
-        top = inliers or top
+        inliers = [it for it in items if lo <= (it[1].raw_price or 0) <= hi]
+        return inliers or items
+
+    clean_exact = _filter_outliers(exact_cond)
+    clean_family = _filter_outliers(family_cond)
+
+    # Kumpulkan pembanding: utamakan exact match
+    pool = list(clean_exact)
+
+    # JAMIN MINIMAL 10 PEMBANDING REAL
+    # Jika exact match < 10, isi dengan family_cond yang memiliki kondisi yang sama
+    if len(pool) < 10 and clean_family:
+        needed = 10 - len(pool)
+        pool += clean_family[:needed]
+
+    # Hanya isi dengan other_cond jika user TIDAK memilih kondisi spesifik (misal 'any')
+    if (not wanted_cond or wanted_cond == "any") and len(pool) < 10 and other_cond:
+        needed = 10 - len(pool)
+        pool += other_cond[:needed]
+
+    if not pool:
+        return []
+
+    # Urutkan berdasarkan kemiripan tertinggi dan kedekatan dengan median
+    prices = sorted(item[1].raw_price or 0 for item in pool)
     anchor = prices[len(prices) // 2]
-    top.sort(key=lambda item: abs((item[1].raw_price or 0) - anchor))
+    pool.sort(key=lambda item: (item[0], -abs((item[1].raw_price or 0) - anchor)), reverse=True)
+
+    # Pastikan distribusi sumber seimbang jika ada banyak sumber,
+    # namun TIDAK memotong pool hingga di bawah 10 jika data tersedia!
     by_source: dict[str, list] = {}
-    for item in top:
+    for item in pool:
         by_source.setdefault(item[1].source or "lain", []).append(item)
-    quota = max(2, (24 + len(by_source) - 1) // len(by_source))
-    pools = [pool[:quota] for pool in by_source.values()]
+
     selected = []
-    while any(pools) and len(selected) < 24:
-        for pool in pools:
-            if pool and len(selected) < 24:
-                selected.append(pool.pop(0))
+    # Target minimal 10, maksimal 24
+    max_target = max(10, min(24, len(pool)))
+    quota = max(3, (max_target + len(by_source) - 1) // len(by_source))
+    source_pools = [p[:quota] for p in by_source.values()]
+    while any(source_pools) and len(selected) < max_target:
+        for p in source_pools:
+            if p and len(selected) < max_target:
+                selected.append(p.pop(0))
+
+    # Jika round-robin menyisakan kuota dan total masih < 10 sedangkan pool punya sisa item:
+    if len(selected) < 10 and len(pool) >= 10:
+        seen_ids = {it[1].id for it in selected}
+        for it in pool:
+            if it[1].id not in seen_ids:
+                selected.append(it)
+                seen_ids.add(it[1].id)
+                if len(selected) >= 10:
+                    break
 
     return [
         Comparison(
-            title=row.raw_title,
+            title=_clean_title(row.raw_title),
             price=row.raw_price or 0,
             source=row.source,
             listing_url=row.listing_url if _is_external_link_allowed(row.source, row.listing_url) else None,
             similarity=similarity,
             condition=row.condition or "new",
         )
-        for similarity, row in selected
+        for similarity, row, _ in selected
     ]
 
 
@@ -488,8 +599,10 @@ _MD_JUNK_RE = re.compile(r"\[!\[[^\]]*\]\([^)]*\)]?\([^)]*\)|!\[[^\]]*\]\([^)]*\
 
 
 def _clean_title(text: str | None) -> str:
-    """Buang sampah markdown/gambar dari judul hasil scrape."""
-    cleaned = _MD_JUNK_RE.sub(" ", text or "")
+    """Buang sampah markdown/gambar dan prefix query dari judul hasil scrape."""
+    raw = text or ""
+    raw = re.sub(r"^[^\u2014\ufffc]+[\u2014\ufffc]\s*", "", raw).strip() or raw
+    cleaned = _MD_JUNK_RE.sub(" ", raw)
     return " ".join(cleaned.split())[:180]
 
 
@@ -548,7 +661,7 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> tuple[list
             LaptopUnit.price <= 150_000_000,
             (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
             or_(*conds),
-        ).order_by(desc(LaptopUnit.scraped_at)).limit(4000)
+        ).order_by(desc(LaptopUnit.scraped_at)).limit(1500)
         rows = list(session.scalars(stmt).all())
 
     if len(rows) < 30:
@@ -560,7 +673,7 @@ def _laptop_comparisons(session: Session, request: AnalyzeRequest) -> tuple[list
                     LaptopUnit.price <= 150_000_000,
                     (LaptopUnit.condition != "issue") | (LaptopUnit.condition.is_(None)),
                     LaptopUnit.source == src,
-                ).order_by(desc(LaptopUnit.scraped_at)).limit(1500)
+                ).order_by(desc(LaptopUnit.scraped_at)).limit(800)
             ).all()
             for r in extra:
                 if r.id not in seen_ids:
