@@ -130,6 +130,67 @@ def test_history_attributed_from_analyze(client):
     assert client.get("/api/v1/history", headers=headers2).json()["items"] == []
 
 
+# ---------------- B10: push history (hash-chain backup / offline sync) ----------------
+
+def test_history_push_and_list(client):
+    _register(client, email="hpush@x.com")
+    headers, _ = _auth_headers(client, email="hpush@x.com")
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "laptop", "query": "MacBook Air M1", "input_price": 11500000,
+              "score": 88.5, "verdict": "worth it"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    item = r.json()
+    assert item["query"] == "MacBook Air M1"
+    assert item["input_price"] == 11500000
+    assert item["score"] == 88.5
+    assert item["verdict"] == "worth it"
+    # appears in GET /history, newest first
+    items = client.get("/api/v1/history", headers=headers).json()["items"]
+    assert any(i["id"] == item["id"] for i in items)
+
+
+def test_history_push_isolated_per_user(client):
+    _register(client, email="hpush2@x.com")
+    headers, _ = _auth_headers(client, email="hpush2@x.com")
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
+              "score": 82.0, "verdict": "wajar"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    _register(client, email="hpush3@x.com")
+    headers3, _ = _auth_headers(client, email="hpush3@x.com")
+    assert client.get("/api/v1/history", headers=headers3).json()["items"] == []
+
+
+def test_history_push_requires_auth(client):
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
+              "score": 82.0, "verdict": "wajar"},
+    )
+    assert r.status_code == 401
+
+
+def test_history_push_validation(client):
+    _register(client, email="hpush4@x.com")
+    headers, _ = _auth_headers(client, email="hpush4@x.com")
+    # bad mode
+    r = client.post("/api/v1/history",
+                    json={"mode": "tablet", "query": "iPad", "input_price": 5000000,
+                          "score": 80.0, "verdict": "wajar"}, headers=headers)
+    assert r.status_code == 422
+    # score out of range
+    r = client.post("/api/v1/history",
+                    json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
+                          "score": 150.0, "verdict": "wajar"}, headers=headers)
+    assert r.status_code == 422
+
+
 def test_wishlist_crud(client):
     _register(client, email="wish@x.com")
     headers, _ = _auth_headers(client, email="wish@x.com")

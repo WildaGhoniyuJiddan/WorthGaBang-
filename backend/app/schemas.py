@@ -221,6 +221,17 @@ class HistoryItem(BaseModel):
     created_at: datetime
 
 
+class HistoryCreate(BaseModel):
+    """B10: app pushes a history entry (e.g. hash-chain backup / offline sync)."""
+
+    mode: str = Field(pattern="^(pc|laptop)$")
+    query: str = Field(min_length=2, max_length=255)
+    input_price: int = Field(gt=0)
+    score: float = Field(ge=0, le=100)
+    verdict: str = Field(min_length=2, max_length=32)
+    created_at: Optional[datetime] = None
+
+
 class WishlistCreate(BaseModel):
     query: str = Field(min_length=2, max_length=255)
     mode: str = Field(default="pc", max_length=16)
