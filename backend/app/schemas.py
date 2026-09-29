@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AnalyzeRequest(BaseModel):
@@ -230,6 +230,18 @@ class HistoryCreate(BaseModel):
     score: float = Field(ge=0, le=100)
     verdict: str = Field(min_length=2, max_length=32)
     created_at: Optional[datetime] = None
+
+    @field_validator("created_at", mode="after")
+    @classmethod
+    def _normalize_to_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        """Mobile clients often omit the offset — assume UTC for naive input.
+        Aware input is converted to UTC so storage is always consistent
+        (SQLite drops tzinfo on read, which would otherwise keep wall time)."""
+        if v is None:
+            return v
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
 
 
 class WishlistCreate(BaseModel):

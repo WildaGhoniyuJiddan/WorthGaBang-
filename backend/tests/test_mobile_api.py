@@ -2,7 +2,7 @@
 import io
 import os
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test_mobile.db"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-hs256"
@@ -189,6 +189,67 @@ def test_history_push_validation(client):
                     json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
                           "score": 150.0, "verdict": "wajar"}, headers=headers)
     assert r.status_code == 422
+
+
+def test_history_push_created_at_naive_assumed_utc(client):
+    """Regression: naive created_at (no offset) must not 500 — assumed UTC."""
+    _register(client, email="hpush5@x.com")
+    headers, _ = _auth_headers(client, email="hpush5@x.com")
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
+              "score": 82.0, "verdict": "wajar",
+              "created_at": "2026-09-29T10:00:00"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    item = r.json()
+    # stored as UTC instant: naive 10:00 -> 10:00 UTC (SQLite returns naive on read)
+    stored = datetime.fromisoformat(item["created_at"])
+    if stored.tzinfo is None:
+        stored = stored.replace(tzinfo=timezone.utc)
+    assert stored == datetime(2026, 9, 29, 10, 0, tzinfo=timezone.utc), item["created_at"]
+
+
+def test_history_push_created_at_with_offset(client):
+    """Aware created_at with +07:00 offset is preserved as-is."""
+    _register(client, email="hpush6@x.com")
+    headers, _ = _auth_headers(client, email="hpush6@x.com")
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "laptop", "query": "ThinkPad", "input_price": 9000000,
+              "score": 75.0, "verdict": "wajar",
+              "created_at": "2026-09-29T17:00:00+07:00"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    item = r.json()
+    # 17:00+07:00 == 10:00 UTC instant (SQLite returns naive on read)
+    stored = datetime.fromisoformat(item["created_at"])
+    if stored.tzinfo is None:
+        stored = stored.replace(tzinfo=timezone.utc)
+    assert stored == datetime(2026, 9, 29, 10, 0, tzinfo=timezone.utc), item["created_at"]
+
+
+def test_history_push_created_at_future_clamped(client):
+    """Future client clock is clamped to server now."""
+    _register(client, email="hpush7@x.com")
+    headers, _ = _auth_headers(client, email="hpush7@x.com")
+    before = utcnow()
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "RTX 4060", "input_price": 4500000,
+              "score": 82.0, "verdict": "wajar",
+              "created_at": "2999-01-01T00:00:00"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    after = utcnow()
+    stored = r.json()["created_at"]
+    assert stored is not None
+    # clamped into [before, after] — never the year 2999
+    assert "2999" not in stored, stored
+    assert before.isoformat() <= stored <= after.isoformat(), stored
 
 
 def test_wishlist_crud(client):
