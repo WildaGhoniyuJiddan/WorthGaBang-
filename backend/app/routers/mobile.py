@@ -59,6 +59,7 @@ from ..schemas import (
     GameQuestionResponse,
     GameSubmitRequest,
     GameSubmitResponse,
+    HistoryCreate,
     HistoryItem,
     HistoryList,
     LoginRequest,
@@ -170,6 +171,42 @@ def history(
             for r in rows
         ]
     }
+
+
+@router.post("/history", response_model=HistoryItem, status_code=201)
+def history_push(
+    payload: HistoryCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HistoryItem:
+    """B10: app backs up a history entry (hash-chain / offline sync).
+
+    Additive only — the auto-attribution in POST /analyze is untouched.
+    """
+    log = AnalysisLog(
+        mode=payload.mode,
+        input_query=payload.query.strip(),
+        result_score=payload.score,
+        user_id=user.id,
+        input_price=payload.input_price,
+        verdict=payload.verdict.strip(),
+    )
+    if payload.created_at is not None:
+        # Clamp: never store a future timestamp from the client clock.
+        now = utcnow()
+        log.created_at = min(payload.created_at, now)
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return HistoryItem(
+        id=log.id,
+        mode=log.mode,
+        query=log.input_query,
+        input_price=log.input_price,
+        score=log.result_score,
+        verdict=log.verdict,
+        created_at=log.created_at,
+    )
 
 
 @router.get("/wishlist", response_model=WishlistList)
