@@ -169,3 +169,217 @@ class IngestItem(BaseModel):
 class IngestRequest(BaseModel):
     items: list[IngestItem] = Field(min_length=1, max_length=500)
     scraped_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# Mobile API (WorthBang Android) — B1..B9
+# ---------------------------------------------------------------------------
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    photo_url: Optional[str] = None
+
+
+class RegisterRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=10)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class LoginResponse(TokenResponse):
+    user: UserResponse
+
+
+class HistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    mode: str
+    query: str
+    input_price: Optional[int] = None
+    score: float
+    verdict: Optional[str] = None
+    created_at: datetime
+
+
+class WishlistCreate(BaseModel):
+    query: str = Field(min_length=2, max_length=255)
+    mode: str = Field(default="pc", max_length=16)
+    target_price: Optional[int] = Field(default=None, gt=0)
+
+
+class WishlistItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    query: str
+    mode: str
+    target_price: Optional[int] = None
+    created_at: datetime
+
+
+class AlertCreate(BaseModel):
+    query: str = Field(min_length=2, max_length=255)
+    mode: str = Field(default="pc", max_length=16)
+    component_type: Optional[str] = Field(default=None, max_length=32)
+    target_price: int = Field(gt=0)
+    condition: str = Field(default="any", max_length=16)
+
+
+class AlertResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    query: str
+    mode: str
+    target_price: int
+    current_price: Optional[int] = None
+    is_active: bool
+    created_at: datetime
+
+
+class StoreResponse(BaseModel):
+    id: int
+    name: str
+    address: Optional[str] = None
+    lat: float
+    lng: float
+    distance_km: float
+    prices: dict[str, int] = {}
+
+
+class TrendPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    price: int
+
+
+class TrendResponse(BaseModel):
+    query: str
+    days: int
+    points: list[TrendPoint]
+    min: Optional[int] = None
+    max: Optional[int] = None
+    avg: Optional[int] = None
+    change_percent: Optional[float] = None
+    summary: str
+
+
+class BuildPart(BaseModel):
+    name: str
+    price: int
+
+
+class BuilderRequest(BaseModel):
+    budget: int = Field(gt=0)
+    use_case: str = Field(default="gaming", max_length=16)
+
+
+class BuilderResponse(BaseModel):
+    cpu: BuildPart
+    gpu: BuildPart
+    ram: BuildPart
+    ssd: BuildPart
+    psu: BuildPart
+    total: int
+    budget: int
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(max_length=16)
+    text: str = Field(max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=10)
+
+
+class ChatBuildItem(BaseModel):
+    component: str
+    name: str
+    price: int
+
+
+class ChatBuild(BaseModel):
+    items: list[ChatBuildItem]
+    total: int
+    note: str = ""
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    build: Optional[ChatBuild] = None
+
+
+class GameQuestionResponse(BaseModel):
+    question_id: str
+    product: str
+    specs: str
+    hint: str = ""
+
+
+class GameSubmitRequest(BaseModel):
+    question_id: str = Field(min_length=10)
+    guess_idr: int = Field(gt=0)
+
+
+class GameSubmitResponse(BaseModel):
+    actual_price: int
+    difference: int  # guess - actual (negative = under)
+    score: int
+
+
+class CurrencyRatesResponse(BaseModel):
+    base: str
+    rates: dict[str, float]
+    updated_at: datetime
+
+
+class FeedbackCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    kesan: Optional[str] = Field(default=None, max_length=2000)
+    saran: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ProfileUpdateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    photo_url: Optional[str] = None
+
+
+class HistoryList(BaseModel):
+    items: list[HistoryItem]
+
+
+class WishlistList(BaseModel):
+    items: list[WishlistItemResponse]
+
+
+class AlertList(BaseModel):
+    items: list[AlertResponse]
+
+
+class StoreList(BaseModel):
+    stores: list[StoreResponse]

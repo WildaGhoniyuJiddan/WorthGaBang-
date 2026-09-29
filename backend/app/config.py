@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     tokopedia_query_variants: int = 5
     tokopedia_request_delay_seconds: float = 3.5
     tokopedia_max_records: int = 500
+    # --- Mobile API (WorthBang Android) ---
+    jwt_secret_key: str = "dev-only-change-me-set-a-real-secret-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_access_minutes: int = 15
+    jwt_refresh_days: int = 7
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    fx_api_url: str = "https://open.er-api.com/v1/latest/IDR"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

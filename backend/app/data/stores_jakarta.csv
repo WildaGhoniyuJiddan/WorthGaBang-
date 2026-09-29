@@ -1,0 +1,13 @@
+name,address,city,lat,lng,prices_json
+"Enter Komputer Mangga Dua","Jl. Mangga Dua Raya No.12, Jakarta Utara","Jakarta",-6.1375,106.8245,"{""RTX 4060"": 4750000, ""Ryzen 5 5600"": 1890000, ""RTX 3060"": 3950000}"
+"Nanovision Harco Mangga Dua","Harco Mangga Dua Lantai 2, Jakarta Utara","Jakarta",-6.1368,106.8252,"{""RTX 4060"": 4690000, ""Ryzen 5 5600"": 1850000, ""RTX 4060 Ti"": 6850000}"
+"Citra Computer","Jl. Cempaka Mas No.88, Jakarta Pusat","Jakarta",-6.1678,106.8667,"{""RTX 4060"": 4820000, ""Ryzen 7 7800X3D"": 6900000}"
+"Toko Komputer Ratu Plaza","Ratu Plaza Lantai 3, Jl. Jend. Sudirman, Jakarta Selatan","Jakarta",-6.2253,106.8012,"{""RTX 4060"": 4780000, ""MacBook Air M1"": 11500000}"
+"Agres ID Pondok Indah","Jl. Metro Pondok Indah, Jakarta Selatan","Jakarta",-6.2658,106.7832,"{""RTX 4060"": 4850000, ""Lenovo LOQ 15"": 13999000}"
+"Jaya PC Kelapa Gading","Jl. Boulevard Raya, Kelapa Gading, Jakarta Utara","Jakarta",-6.1589,106.9087,"{""RTX 4060"": 4720000, ""Ryzen 5 5600"": 1875000, ""RTX 3060"": 3890000}"
+"Quantum Computer ITC Cempaka Mas","ITC Cempaka Mas Lantai 4, Jakarta Timur","Jakarta",-6.1685,106.8675,"{""RTX 4060"": 4810000, ""ASUS TUF A15"": 15499000}"
+"Mitra Computer Glodok","Jl. Gajah Mada No.188, Jakarta Barat","Jakarta",-6.1423,106.8098,"{""RTX 4060"": 4770000, ""Ryzen 5 5600"": 1900000}"
+"Starlight PC Tebet","Jl. Tebet Raya No.45, Jakarta Selatan","Jakarta",-6.2389,106.8521,"{""RTX 4060"": 4830000, ""RTX 4060 Ti"": 6790000}"
+"Galaxy Komputer Depok Timur","Jl. Margonda Raya No.210, Depok","Jakarta",-6.3725,106.8334,"{""RTX 4060"": 4740000, ""Ryzen 5 5600"": 1860000}"
+"Orbit PC Bekasi","Jl. Ahmad Yani No.33, Bekasi","Jakarta",-6.2383,106.9756,"{""RTX 4060"": 4760000, ""Lenovo LOQ 15"": 14199000}"
+"Nova Computer Tangerang","Jl. MH Thamrin No.5, Tangerang","Jakarta",-6.1783,106.6319,"{""RTX 4060"": 4790000, ""Ryzen 5 5600"": 1885000}"

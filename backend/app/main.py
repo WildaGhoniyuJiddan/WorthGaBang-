@@ -33,6 +33,9 @@ from .services.analysis import all_freshness, analyze, new_price_anchor, resolve
 from .services.scoring import score_price
 from .services.coverage import report_pc_coverage
 from .services.suggest import suggest_components
+from .routers.mobile import router as mobile_router
+from .auth import get_optional_user
+from .models import User as MobileUser  # used in analyze_price annotation below
 
 
 @asynccontextmanager
@@ -49,9 +52,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list or ["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+app.include_router(mobile_router)
 
 
 @app.exception_handler(Exception)
@@ -67,9 +71,20 @@ def health(db: Session = Depends(get_db)) -> dict:
 
 
 @app.post("/api/v1/analyze", response_model=AnalyzeResponse)
-def analyze_price(payload: AnalyzeRequest, db: Session = Depends(get_db)) -> AnalyzeResponse:
+def analyze_price(
+    payload: AnalyzeRequest,
+    db: Session = Depends(get_db),
+    opt_user: MobileUser | None = Depends(get_optional_user),
+) -> AnalyzeResponse:
     result, comparisons, freshness, alternatives = analyze(db, payload)
-    db.add(AnalysisLog(mode=payload.mode, input_query=payload.query, result_score=result.score))
+    log = AnalysisLog(mode=payload.mode, input_query=payload.query, result_score=result.score)
+    # Additive: attribute mobile history when a valid Bearer token is present.
+    # Response shape/behavior for existing callers is unchanged.
+    if opt_user is not None:
+        log.user_id = opt_user.id
+        log.input_price = payload.price
+        log.verdict = result.verdict
+    db.add(log)
     db.commit()
     return AnalyzeResponse(
         mode=payload.mode,

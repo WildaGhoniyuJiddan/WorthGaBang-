@@ -292,3 +292,12 @@ skills-lock.json
 
 
 .env*
+
+# WorthBang mobile API: keep the LBS demo seed CSV, ignore uploaded profile photos
+!backend/app/data/stores_jakarta.csv
+backend/app/data/profile_photos/
+
+# WorthBang mobile API tests are a deliverable — track this file
+!backend/tests/
+backend/tests/*
+!backend/tests/test_mobile_api.py
