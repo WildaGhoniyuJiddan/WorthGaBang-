@@ -1,3 +1,6 @@
 .vercel
 .env*
 exports/
+# Data scraping lokal (workflow: lokal dulu, upload terpisah) — jangan ikut commit
+app/local_scratch/*
+!app/local_scratch/.gitkeep

@@ -35,11 +35,16 @@ Scrape → Stream langsung ke Supabase (row by row)
 
 ### **Approach Baru** (Batch):
 ```
-Scrape → Save local JSON 
-       → Process & Clean data
-       → Upload 1 batch to Supabase
+Scrape → Save local JSON            (local_scratch/scraped_raw)
+       → Process & Clean data       (local_scratch/processed_batch)
+       → CEK MANUAL DI LOKAL        ← gerbang: data belum bersih = jangan upload
+       → python -m app.batch_jobs upload   (langkah terpisah, eksplisit)
        → Egress rendah: 1 × total_batch MB
 ```
+
+> **Aturan wajib (user, 2026-10-07):** upload TIDAK PERNAH jalan otomatis
+> sesudah scrape. Scrape selalu mendarat di lokal dulu; Supabase hanya diisi
+> setelah data dinyatakan bersih.
 
 ---
 
@@ -49,7 +54,7 @@ Scrape → Save local JSON
 
 ```python
 def run_batch_scraper(source: str, query: str, fetch_fn):
-    """Complete workflow: scrape → save local → process → upload"""
+    """Workflow lokal: scrape → save local → process (TANPA upload)"""
     
     # Step 1: Scrape locally
     records = fetch_fn(query)
@@ -60,11 +65,9 @@ def run_batch_scraper(source: str, query: str, fetch_fn):
     # Step 3: Process & validate data
     processed_records, skipped = process_batch(filepath)
     
-    # Step 4: Upload 1 batch ke Supabase
-    if processed_records:
-        upload_to_supabase(processed_records)
-    
-    return {"status": "success", "uploaded_count": len(processed_records)}
+    # Step 4: STOP di sini. Upload = perintah terpisah:
+    #   python -m app.batch_jobs upload
+    return {"status": "success", "pending_upload": len(processed_records)}
 ```
 
 ### 2. Fungsi Utama
@@ -82,10 +85,12 @@ def run_batch_scraper(source: str, query: str, fetch_fn):
 - Simpan hasil ke `processed_batch/`
 - Return: `(processed_records, skipped_count)`
 
-#### `upload_to_supabase(records)`
-- Insert semua records sekaligus via Supabase client
-- 1x operation vs thousands of individual inserts
-- jauh lebih efisien untuk egress
+#### `upload_pending()` — `python -m app.batch_jobs upload`
+- Mengunggah file `processed_batch/*_processed.json` yang belum terkirim
+- Insert lewat `ingest_listings` (hash dedupe + gerbang kualitas ex-mining),
+  bukan REST supabase-py — jalan walau API Supabase sedang 402
+- File dipindah ke `local_scratch/uploaded/` supaya tidak terkirim dua kali
+- Perintah lain: `python -m app.batch_jobs status` (lihat antrian upload)
 
 ---
 
@@ -218,6 +223,7 @@ local_scratch/processed_batch/*
 ### Log Format (upload.log):
 ```json
 {"action": "upload_batch", "source": "tokopedia", "record_count": 487, "timestamp": "..."}
+{"files": 2, "inserted": 380, "duplicate": 0, "rejected": 0, "action": "upload_pending", "timestamp": "..."}
 ```
 
 ### Verify Upload Success:
@@ -244,7 +250,7 @@ ls -lh backend/app/local_scratch/scraped_raw/
 
 ### Egress masih tinggi?
 - Pastikan pakai `insert(batch)` bukan loop `insert(row-by-row)`
-- Verifikasi `upload_to_supabase()` dipanggil sekali per scrape
+- Verifikasi TIDAK ada upload otomatis — hanya `python -m app.batch_jobs upload`
 - Monitor network traffic dengan tools seperti Wireshark
 
 ---

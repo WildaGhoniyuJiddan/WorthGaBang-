@@ -4,6 +4,7 @@
 # re-add a path only if the app really reads it at runtime.
 data/
 exports/
+app/local_scratch/
 .venv/
 __pycache__/
 *.pyc
