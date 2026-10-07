@@ -252,6 +252,31 @@ def test_history_push_created_at_future_clamped(client):
     assert before.isoformat() <= stored <= after.isoformat(), stored
 
 
+def test_history_push_strips_whitespace_in_schema(client):
+    """query/verdict are stripped during validation (strip_whitespace=True),
+    so min_length applies to the stripped value — 'a ' must 422, not store 'a'."""
+    _register(client, email="hpush8@x.com")
+    headers, _ = _auth_headers(client, email="hpush8@x.com")
+    # leading/trailing whitespace is stripped, still valid
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "  RTX 4060  ", "input_price": 4500000,
+              "score": 82.0, "verdict": "  wajar  "},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["query"] == "RTX 4060"
+    assert r.json()["verdict"] == "wajar"
+    # whitespace-only padding can't sneak past min_length: "a " -> "a" -> 422
+    r = client.post(
+        "/api/v1/history",
+        json={"mode": "pc", "query": "a ", "input_price": 4500000,
+              "score": 82.0, "verdict": "ok"},
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+
+
 def test_wishlist_crud(client):
     _register(client, email="wish@x.com")
     headers, _ = _auth_headers(client, email="wish@x.com")

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
 class AnalyzeRequest(BaseModel):
@@ -225,10 +225,10 @@ class HistoryCreate(BaseModel):
     """B10: app pushes a history entry (e.g. hash-chain backup / offline sync)."""
 
     mode: str = Field(pattern="^(pc|laptop)$")
-    query: str = Field(min_length=2, max_length=255)
+    query: Annotated[str, StringConstraints(min_length=2, max_length=255, strip_whitespace=True)]
     input_price: int = Field(gt=0)
     score: float = Field(ge=0, le=100)
-    verdict: str = Field(min_length=2, max_length=32)
+    verdict: Annotated[str, StringConstraints(min_length=2, max_length=32, strip_whitespace=True)]
     created_at: Optional[datetime] = None
 
     @field_validator("created_at", mode="after")

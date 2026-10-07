@@ -185,11 +185,11 @@ def history_push(
     """
     log = AnalysisLog(
         mode=payload.mode,
-        input_query=payload.query.strip(),
+        input_query=payload.query,  # schema sudah strip_whitespace=True
         result_score=payload.score,
         user_id=user.id,
         input_price=payload.input_price,
-        verdict=payload.verdict.strip(),
+        verdict=payload.verdict,  # schema sudah strip_whitespace=True
     )
     if payload.created_at is not None:
         # Clamp: never store a future timestamp from the client clock.
