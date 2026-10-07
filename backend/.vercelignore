@@ -1,0 +1,19 @@
+# Keep the Python bundle under Vercel's 225MB function limit.
+# Local-only material: recon browser profile, sqlite dumps, CSV exports, venv.
+# ponytail: runtime datasets live in app/data/*.json and must NOT be listed here;
+# re-add a path only if the app really reads it at runtime.
+data/
+exports/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vercel/
+.env
+.env.*
+test_*.py
+scratch_*.py
+local_scraper.py
+scheduler.py
+deploy_quick.py
+setup_batch_scraper.py

@@ -292,3 +292,8 @@ skills-lock.json
 
 
 .env*
+
+# Local-only: DB dump backup & throwaway scripts (contain live data)
+backup/
+scratch/
+worl-tools.zip
