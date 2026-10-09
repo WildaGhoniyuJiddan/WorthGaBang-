@@ -45,12 +45,28 @@ async def lifespan(_: FastAPI):
 
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
+
+# SECURITY: never combine "*" origins with allow_credentials=True — Starlette
+# would reflect any Origin, letting hostile sites make credentialed requests.
+# Strip "*" and fall back to the known frontend origins instead.
+_cors_origins = [o for o in settings.cors_origin_list if o != "*"]
+if not _cors_origins:
+    _cors_origins = ["https://worthgabang-mooix.vercel.app", "http://localhost:3000"]
+
+_is_prod = settings.environment == "production"
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
+)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list or ["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -313,8 +329,8 @@ def trigger_pipeline(
     raise HTTPException(status_code=404, detail=f"Pipeline tidak dikenal: {name}")
 
 
-# Debug endpoint for database connection
-@app.get("/api/v1/debug/db")
+# Debug endpoints are gated behind the job token (no public access in prod).
+@app.get("/api/v1/debug/db", dependencies=[Depends(require_job_token)])
 def debug_db(db: Session = Depends(get_db)) -> dict:
     try:
         db.execute(select(1))
@@ -322,7 +338,7 @@ def debug_db(db: Session = Depends(get_db)) -> dict:
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/api/v1/debug/env")
+@app.get("/api/v1/debug/env", dependencies=[Depends(require_job_token)])
 def debug_env():
     # Return non-sensitive environment variables for debugging
     safe_vars = ['ENVIRONMENT', 'CORS_ORIGINS', 'NEXT_PUBLIC_API_BASE_URL']
